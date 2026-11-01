@@ -94,10 +94,20 @@ that accepts images. Local Ollama can use `http://localhost:11434/v1` without
 a key. Anthropic Claude defaults to `claude-opus-5-5`; `claude-sonnet-5-5`,
 `claude-fable-5-1` and `claude-haiku-5-5` are also available.
 
-**Choose a film** prints small proofs on each colour film with its declared
-paper (slides are scanned), skips push-process variants and puts the current
-combination first; black and white can be included. Each proof uses the same
-neutral settings: automatic metering and a neutral filter pack, without Scene
+**Choose a film** first sets exposure if the photo is still on the default
+(balanced automatic metering, zero compensation). It proofs the current film
+with balanced, center, protect highlights and protect shadows metering, then
+asks the model to choose from a contact sheet for the scene: protect highlights suits night, fireworks,
+stage and backlit scenes; protect shadows suits snow, beaches and bright skies.
+Average metering can turn a night scene grey, making film comparison meaningless.
+The choice is saved to the photo and included in **Undo AI changes**; if the model's
+answer cannot be read, the existing setting is kept. Non-default exposure settings
+are also kept, and the interface shows whether AI chose or the setting was retained.
+
+It then prints small proofs on each colour film with its declared paper (slides
+are scanned), skips push-process variants and puts the current combination first;
+black and white can be included. Each proof uses the photo's current exposure and
+the same otherwise neutral settings: a neutral filter pack, without Scene
 Placement, grain, glare or grading. A vision model receives a numbered contact
 sheet and measurements of clipping, brightness, contrast, colourfulness, cast
 and latitude coverage, then returns 3–5 choices with scores and reasons.
@@ -106,7 +116,7 @@ separate engine instance, leaving the canvas, edit and undo history alone;
 19 films at 768 px took about 3 seconds on an M-series Mac.
 
 **Refine** gives the model a 1024 px view of the print and up to three rounds
-to adjust Film Exposure, paper brightness, enlarger Y/M filters, pre-flash,
+to adjust metering, Film Exposure, paper brightness, enlarger Y/M filters, pre-flash,
 grain, halation, Scene Placement and Post-Dev grading. It cannot change film,
 paper, crop, Film Edge, Date Back or decode; out-of-scope or out-of-range
 changes are refused and reported back to the model. **Undo AI changes** restores
