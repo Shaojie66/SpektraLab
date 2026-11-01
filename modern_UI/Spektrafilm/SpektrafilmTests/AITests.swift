@@ -226,6 +226,19 @@ final class AIUnitTests: XCTestCase {
         XCTAssertNil(both.patch)
     }
 
+    func testTheRefinerIsToldToKeepWhatLiesOutsideTheIntent() {
+        let text = AIPrompts.refinerSystem
+        XCTAssertTrue(text.contains("outside the intent"))
+        XCTAssertTrue(text.contains("sky"), "a global warm-up must not cost the sky")
+        XCTAssertTrue(text.contains("colour balance by tonal zone"))
+        XCTAssertTrue(text.contains("total pull-backs, not additions"))
+        let user = AIPrompts.refinerUser(document: ["params": [:], "adjustments": [:]],
+                                         latitude: ["fit": ["highlight": ["minimumPullBack": 0.8]], "placement": ["highlightPullBack": 0.6]],
+                                         film: "Gold 200", exif: nil, intent: "", history: [], feedback: nil, round: 2, of: 3)
+        XCTAssertTrue(user.contains("minimumPullBack"), "the minimum the prompt names is in what the model reads")
+        XCTAssertTrue(user.contains("highlightPullBack"), "and so is the current total")
+    }
+
     // MARK: which films
 
     func testTheDefaultCandidatesAreFairAndPrintable() {
@@ -502,6 +515,22 @@ final class AISessionTests: XCTestCase {
 ///         -only-testing:SpektrafilmTests/AIEndToEndTests
 @MainActor
 final class AIEndToEndTests: XCTestCase {
+    private struct Tracing: AITransport {
+        let inner: AITransport
+        func post(_ url: URL, headers: [String: String], body: Data) async throws -> AIHTTPResponse {
+            let r = try await inner.post(url, headers: headers, body: body)
+            let json = try? JSONValue.parse(String(decoding: r.body, as: UTF8.self))
+            var text = ""
+            if case .array(let blocks)? = json?["content"] {
+                text = blocks.filter { $0["type"]?.string == "text" }.compactMap { $0["text"]?.string }.joined()
+            } else if case .array(let choices)? = json?["choices"] {
+                text = choices.first?["message"]?["content"]?.string ?? ""
+            }
+            print("E2E raw:", text.replacingOccurrences(of: "\n", with: " "))
+            return r
+        }
+    }
+
     func testChooseRefineAndUndo() async throws {
         let env = ProcessInfo.processInfo.environment
         // `SPK_AI_E2E=anthropic` uses Claude with the key saved in Settings ▸ AI
@@ -538,6 +567,12 @@ final class AIEndToEndTests: XCTestCase {
         try await ws.open(url.path)
         let s = ws.session
         let assistant = AIAssistant(session: s)
+        // Every answer, as the model wrote it, so a run can be read afterwards.
+        assistant.makeClient = {
+            var c = try AISettings.client()
+            c.transport = Tracing(inner: c.transport)
+            return c
+        }
         assistant.intent = env["SPK_AI_INTENT"] ?? "warm and cinematic"
         let before = s.sidecar
 

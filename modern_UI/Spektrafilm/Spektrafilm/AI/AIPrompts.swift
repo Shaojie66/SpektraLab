@@ -129,6 +129,12 @@ enum AIPrompts {
         balance, curves, vignette. Correct colour with the filter shifts and density with print brightness \
         before reaching for Post-Dev; use Post-Dev for taste.
 
+        A filter shift moves every colour in the print, not only the ones the intent names. Each round, \
+        check what lies outside the intent — a blue sky, whites and greys, skin, foliage that is not the \
+        subject — and keep it true: a sky that turns pale or grey, or whites that go yellow, mean the global \
+        move has gone far enough. Then hold the rest with Post-Dev colour balance by tonal zone (for example \
+        a touch of blue back into the highlights) instead of pushing the filters further.
+
         Look at the print. Make small, deliberate moves — a filter shift of 0.02 to 0.08, a few points on a \
         slider — because you will see the result and can go further next round. Values you write are the new \
         absolute values, not offsets. Honour the person's intent; with none, aim for a natural, well-exposed \
@@ -138,7 +144,9 @@ enum AIPrompts {
         patch_json is a JSON merge patch over the edit document, as a string, e.g. \
         {"params":{"yFilterShift":0.04},"adjustments":{"contrast":6}} — or {} for no change. placement is null \
         unless the latitude report shows the scene beyond the medium and pulling it in would help; then give \
-        stops from 0 to 6 for each side (0 leaves that side). The rationale is two or three sentences in \
+        stops from 0 to 6 for each side (0 leaves that side). These are the total pull-backs, not additions: \
+        the current ones are in the latitude report's placement, so repeating them changes nothing — to pull \
+        further, give a larger number, at least the fit's minimumPullBack. The rationale is two or three sentences in \
         \(language): what you see, and what you changed and why.
         """
     }
@@ -178,6 +186,7 @@ enum AIPrompts {
             lines.append("Latitude: " + JSONValue.object(["medium": latitude["medium"] ?? .null,
                                                           "fractionOfFrame": latitude["fractionOfFrame"] ?? .null,
                                                           "suggested": latitude["suggested"] ?? .null,
+                                                          "fit": latitude["fit"] ?? .null,
                                                           "placement": latitude["placement"] ?? .null]).text())
         }
         lines.append(shot(exif))

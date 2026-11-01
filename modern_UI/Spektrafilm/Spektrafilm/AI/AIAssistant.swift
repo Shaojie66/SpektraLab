@@ -191,8 +191,11 @@ final class AIAssistant {
                 }
                 if let place = move.placement {
                     do {
+                        // The pull-backs are totals: the same numbers again move
+                        // nothing, and the round must not say they did.
+                        let was = session.params.sceneLatitude
                         _ = try await ws.place(highlight: place.highlight, shadow: place.shadow)
-                        changed.append("params.sceneLatitude")
+                        if session.params.sceneLatitude != was { changed.append("params.sceneLatitude") }
                     } catch let e as AgentError {
                         refused.append(e.description)
                     }
