@@ -22,6 +22,7 @@ import Observation
 final class AIAssistant {
     enum Phase: Equatable {
         case idle
+        case metering
         case proofing(done: Int, total: Int)
         case asking
         case refining(round: Int, of: Int)
@@ -59,6 +60,15 @@ final class AIAssistant {
     var intent = ""
     var includeMonochrome = false
     var recommendation: Recommendation?
+    /// How the frame is exposed for its proofs, and who decided.
+    struct ExposureChoice {
+        let url: URL
+        let meter: AEMethod
+        /// The model's words; empty when the person's own setting was kept.
+        let reason: String
+        let byAI: Bool
+    }
+    var exposureChoice: ExposureChoice?
     var steps: [Step] = []
     var error: String?
     private(set) var before: (url: URL, sidecar: Sidecar)?
@@ -93,9 +103,12 @@ final class AIAssistant {
         start { [self] in
             let client = try makeClient()
             let catalog = session.catalog
+            guard let url = session.selection else { throw ProofSheet.Failure.nothingOpen }
+            guard session.pair == nil else { throw ProofSheet.Failure.pair }
+            try await chooseExposure(client: client, url: url)
+            try Task.checkCancellation()
             let candidates = ProofSheet.defaultCandidates(catalog: catalog, current: session.params,
                                                           includeMonochrome: includeMonochrome)
-            guard let url = session.selection else { throw ProofSheet.Failure.nothingOpen }
             phase = .proofing(done: 0, total: candidates.count)
             let proofs = try await ProofSheet.render(session: session, candidates: candidates,
                                                      longEdge: Self.proofLongEdge) { [weak self] done, total in
@@ -118,6 +131,53 @@ final class AIAssistant {
             guard session.selection == url else { return }
             recommendation = Recommendation(url: url, summary: summary, picks: picks, compared: proofs.count)
         }
+    }
+
+    /// The exposure the films are proofed at, decided for the scene before
+    /// any film is: one film under each of the four meters, on one sheet, and
+    /// the model picks the print that is exposed the way the scene should be.
+    /// A night frame averaged to mid-grey is no film's look, and every proof
+    /// after it would be compared at the wrong exposure.
+    ///
+    /// Only while the frame is on the untouched default (balanced, no Exp.
+    /// Comp.): an exposure the person set is theirs and is kept. The choice
+    /// goes through `applyAgentEdit` like any edit, so Undo AI changes takes
+    /// it back with the rest.
+    private func chooseExposure(client: AIClient, url: URL) async throws {
+        let p = session.params
+        let untouched = p.autoExposure && p.exposureCompensationEV == 0
+            && (p.autoExposureMethod ?? ExposureMethod.balanced.rawValue) == ExposureMethod.balanced.rawValue
+        guard untouched else {
+            exposureChoice = ExposureChoice(url: url, meter: AEMethod.of(p), reason: "", byAI: false)
+            return
+        }
+        let base = ProofSheet.candidate(film: p.filmStock, paper: p.scanFilm ? nil : p.printStock, catalog: session.catalog)
+            ?? ProofSheet.candidate(film: FilmParams.default.filmStock, paper: nil, catalog: session.catalog, declared: true)
+        guard let base else { return }
+        phase = .metering
+        let candidates = ExposureMethod.allCases.map {
+            ProofCandidate(film: base.film, paper: base.paper, meter: $0.rawValue)
+        }
+        let proofs = try await ProofSheet.render(session: session, candidates: candidates, longEdge: Self.proofLongEdge)
+        guard let sheet = ProofSheet.contactSheet(proofs, catalog: session.catalog, columns: 2),
+              let jpeg = Self.jpeg(sheet) else { throw ProofSheet.Failure.noPixels("exposure sheet") }
+        let answer = try await client.complete(AIRequest(
+            system: AIPrompts.exposureSystem,
+            parts: [.jpeg(jpeg), .text(AIPrompts.exposureUser(proofs: proofs, exif: session.exif, intent: intent))],
+            schema: AIPrompts.exposureSchema))
+        try Task.checkCancellation()
+        guard session.selection == url else { return }
+        // An unreadable answer keeps the default rather than ending the run:
+        // the films can still be compared, at the exposure the frame has.
+        guard let (meter, reason) = try? AIPrompts.readMeter(answer) else {
+            exposureChoice = ExposureChoice(url: url, meter: AEMethod.of(p), reason: "", byAI: false)
+            return
+        }
+        if meter != .balanced {
+            remember()
+            _ = try session.applyAgentEdit(["params": ["autoExposure": true, "autoExposureMethod": .string(meter.rawValue)]])
+        }
+        exposureChoice = ExposureChoice(url: url, meter: .metered(meter), reason: reason, byAI: true)
     }
 
     /// The film list's rule, then Solve — what choosing it by hand and

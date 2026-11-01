@@ -12,14 +12,18 @@
 //
 //  **The same print for every film.** Each candidate is opened from the
 //  frame's own parameters with the things that would make the comparison
-//  unfair taken out: the meter on and Exp. Comp. at zero, the filter shifts
-//  and print brightness at zero (Solve sets the neutral pack per pair), no
+//  unfair taken out: the filter shifts and print brightness at zero (Solve
+//  sets the neutral pack per pair), no
 //  Scene Placement (its curve is solved for one medium), no film edge or
 //  date, and no grain or glare — grain at 768 px is aliasing rather than
 //  grain, and glare is the pipeline's one unseeded stage (AGENTS.md trap 1),
 //  so with both off a proof reproduces bit for bit. No Layer 2: a proof
 //  compares films, not grades. The crop and straighten *are* applied, so
-//  the proof is the composition the person sees.
+//  the proof is the composition the person sees. The exposure is the
+//  frame's own, the same for every film: it is a decision about the scene
+//  (a night sky metered to mid-grey is nobody's film), so it is settled
+//  first, on an exposure sheet of one film under the four meters
+//  (`ProofCandidate.meter`, `AIAssistant.chooseExposure`).
 
 import CoreGraphics
 import CoreImage
@@ -31,6 +35,10 @@ struct ProofCandidate: Hashable, Sendable {
     let film: String
     /// Nil: the film is scanned (a slide film).
     let paper: String?
+    /// A meter (`ExposureMethod` raw value) to expose this proof with, in
+    /// place of the frame's own exposure. Set for the exposure sheet, where
+    /// the film is fixed and the meter is what varies; nil everywhere else.
+    var meter: String? = nil
 
     func name(in catalog: StockCatalog) -> String {
         let f = catalog.stock(film)?.name ?? film
@@ -39,7 +47,9 @@ struct ProofCandidate: Hashable, Sendable {
     }
 
     var json: JSONValue {
-        ["film": .string(film), "paper": paper.map(JSONValue.string) ?? "scan"]
+        var o: [String: JSONValue] = ["film": .string(film), "paper": paper.map(JSONValue.string) ?? "scan"]
+        if let meter { o["meter"] = .string(meter) }
+        return .object(o)
     }
 }
 
@@ -56,11 +66,15 @@ enum ProofSheet {
         /// Fractions of the frame below, within and above the medium's
         /// latitude, from the engine; nil when it could not measure.
         let latitude: (below: Double, within: Double, above: Double)?
+        /// The Film Exposure the proof was printed at, stops: what the meter
+        /// chose, or the frame's own Exp. Comp. with the meter off.
+        var exposureEV: Double? = nil
 
         func json(in catalog: StockCatalog) -> JSONValue {
             var o: [String: JSONValue] = ["index": .number(Double(index)), "name": .string(candidate.name(in: catalog)),
                                           "metrics": metrics.json]
             for (k, v) in candidate.json.object ?? [:] { o[k] = v }
+            if let ev = exposureEV { o["exposureEV"] = .number((ev * 100).rounded() / 100) }
             if let l = latitude {
                 func r(_ v: Double) -> JSONValue { .number((v * 1000).rounded() / 1000) }
                 o["latitude"] = ["below": r(l.below), "within": r(l.within), "above": r(l.above)]
@@ -122,11 +136,13 @@ enum ProofSheet {
 
     // MARK: printing
 
-    /// The parameters every proof starts from (see the file comment).
+    /// The parameters every proof starts from (see the file comment). The
+    /// frame's own exposure — its meter, or Custom and its Exp. Comp. — is
+    /// kept: how a photograph is exposed is decided for the scene, not per
+    /// film, and a night frame metered to mid-grey is no film's look
+    /// (`AIAssistant.chooseExposure` settles it before the films are proofed).
     static func proofParams(from p: FilmParams) -> FilmParams {
         var q = p
-        q.autoExposure = true
-        q.exposureCompensationEV = 0
         q.yFilterShift = 0
         q.mFilterShift = 0
         q.printBrightnessStops = 0
@@ -189,13 +205,20 @@ enum ProofSheet {
             } else {
                 sc.params.scanFilm = true
             }
+            if let meter = c.meter {
+                sc.params.autoExposure = true
+                sc.params.autoExposureMethod = meter
+                sc.params.exposureCompensationEV = 0
+            }
             // The engine's live tier renders at min(preview edge, picture), and
             // will not take a preview edge under 800: the frame's own size is
             // what bounds the proof.
             let delta = Session.openDelta(sidecar: sc, previewLongEdge: max(800, longEdge))
             let opened = try await client.open(frame, paramsDelta: delta)
-            _ = try await client.call(.solve, SolveRequest(sessionID: opened.sessionID, target: "both"),
-                                      as: SolveResponse.self)
+            let solved = try await client.call(.solve, SolveRequest(sessionID: opened.sessionID, target: "both"),
+                                               as: SolveResponse.self)
+            let exposureEV = sc.params.autoExposure ? solved.solvedParams["exposure_compensation_ev"]
+                                                    : sc.params.exposureCompensationEV
             let rendered = try await client.render(.reprint, RenderRequest(sessionID: opened.sessionID))
             guard let texture = rendered.texture else { throw Failure.noPixels(c.film) }
             if setup == nil {
@@ -212,7 +235,8 @@ enum ProofSheet {
             let latitude = try? await client.sceneLatitude(SceneLatitudeRequest(highlightPullBack: 0, shadowPullBack: 0))
             let readout = latitude.map(LatitudeReadout.init)
             proofs.append(Proof(index: i + 1, candidate: c, image: image, metrics: metrics,
-                                latitude: readout.map { ($0.below, $0.within, $0.above) }))
+                                latitude: readout.map { ($0.below, $0.within, $0.above) },
+                                exposureEV: exposureEV))
             progress?(i + 1, candidates.count)
         }
         return proofs
@@ -248,10 +272,15 @@ enum ProofSheet {
             let rect = CGRect(x: CGFloat(x) + (CGFloat(tile) - dw) / 2,
                               y: CGFloat(top - tile) + (CGFloat(tile) - dh) / 2, width: dw, height: dh)
             ctx.draw(proof.image, in: rect)
-            draw("\(proof.index)  \(catalog.stock(proof.candidate.film)?.name ?? proof.candidate.film)",
+            let title = proof.candidate.meter.flatMap(ExposureMethod.init(rawValue:))?.title
+                ?? catalog.stock(proof.candidate.film)?.name ?? proof.candidate.film
+            draw("\(proof.index)  \(title)",
                  at: CGPoint(x: x, y: top - tile - 18), size: 15, bold: true, in: ctx)
-            let paper = proof.candidate.paper.map { catalog.stock($0)?.name ?? $0 } ?? "scanned"
-            draw(paper, at: CGPoint(x: x, y: top - tile - 33), size: 12, bold: false, in: ctx)
+            var second = proof.candidate.paper.map { catalog.stock($0)?.name ?? $0 } ?? "scanned"
+            if proof.candidate.meter != nil, let ev = proof.exposureEV {
+                second = String(format: "metered %+.1f EV", ev)
+            }
+            draw(second, at: CGPoint(x: x, y: top - tile - 33), size: 12, bold: false, in: ctx)
         }
         return ctx.makeImage()
     }

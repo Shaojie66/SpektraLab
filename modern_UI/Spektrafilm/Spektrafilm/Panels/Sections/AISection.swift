@@ -69,6 +69,9 @@ struct AISection: View {
                     if assistant.busy { pill(L("Stop", zh: "停止"), help: "", enabled: true) { assistant.cancel() } }
                 }
                 status
+                if let x = assistant.exposureChoice, x.url == session.selection {
+                    exposureLine(x)
+                }
                 if let rec = assistant.recommendation, rec.url == session.selection {
                     if !rec.summary.isEmpty { Text(rec.summary).font(Theme.Font.caption).foregroundStyle(Theme.text)
                         .fixedSize(horizontal: false, vertical: true) }
@@ -104,6 +107,18 @@ struct AISection: View {
                     pill(L("Apply", zh: "应用"), help: L("Choose this film and paper, then Process.", zh: "选用这款胶片和相纸并冲印。"),
                          enabled: !assistant.busy && !session.batchExporting) { assistant.apply(pick) }
                 }
+            }
+        }
+    }
+
+    private func exposureLine(_ x: AIAssistant.ExposureChoice) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(x.byAI ? L("Exposure: \(x.meter.title) (chosen by AI)", zh: "曝光：\(x.meter.title)（AI 选择）")
+                        : L("Exposure: \(x.meter.title) (your setting, kept)", zh: "曝光：\(x.meter.title)（沿用你的设置）"))
+                .font(Theme.Font.label).foregroundStyle(Theme.text)
+            if !x.reason.isEmpty {
+                Text(x.reason).font(Theme.Font.caption).foregroundStyle(Theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -165,6 +180,8 @@ struct AISection: View {
             } else if session.pair != nil {
                 caption(L("Not available on a half-frame pair yet.", zh: "暂不支持半格拼接。"))
             }
+        case .metering:
+            progress(L("Choosing the exposure…", zh: "正在判断曝光……"))
         case .proofing(let done, let total):
             progress(L("Printing proofs \(done)/\(total)…", zh: "正在冲印小样 \(done)/\(total)……"))
         case .asking:

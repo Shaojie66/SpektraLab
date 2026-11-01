@@ -530,6 +530,7 @@ through controls a person already has:
 
 | | what happens | code |
 |---|---|---|
+| **Choose the exposure** | first, and only while the frame is on the untouched default (balanced, no Exp. Comp.): the current film printed under each of the four meters on one sheet; the model picks the meter the scene wants (protect highlights for night, fireworks, stage, backlight; protect shadows for snow, beach, bright sky), set through `applyAgentEdit` | `AIAssistant.chooseExposure`, `ProofCandidate.meter` |
 | **Choose a film** | the frame is printed small (512 px) on every colour film, each on its declared paper, slides scanned, push processes aside, the current pair first; a vision model sees the numbered contact sheet and each proof's numbers and ranks the best 3–5 with reasons; **Apply** is `selectFilmStock` + `selectPrintStock` + Solve | `AI/ProofSheet`, `AI/ImageMetrics`, `AI/AIAssistant.recommendFilm` |
 | **Refine** | up to three rounds of: the finished print (1024 px, through `Exporter` like an agent preview) + the writable fields + the latitude report → the model answers a JSON merge patch and an optional Scene Placement → `applyAgentEdit` / `placeSceneNow`, refusals reported back | `AIAssistant.refine`, `AI/AIPrompts` |
 
@@ -540,15 +541,20 @@ through controls a person already has:
   `AISessionTests.testProofsLeaveTheSessionAlone` renders the canvas's
   session again afterwards and checks it is still the frame — shown red with
   the shared client. Nineteen films at 768 px: ~3 s on an M-series Mac.
-- **A proof is a neutral print** (`ProofSheet.proofParams`): meter on, Exp.
-  Comp., filter shifts and print brightness 0 with the pack solved per pair,
-  no Scene Placement, film edge or date, and grain and glare off — so a proof
-  reproduces bit for bit (AGENTS.md trap 1) and the tiles differ only by film.
+- **A proof is a neutral print** (`ProofSheet.proofParams`): the frame's own
+  exposure (the same for every film), filter shifts and print brightness 0
+  with the pack solved per pair, no Scene Placement, film edge or date, and
+  grain and glare off — so a proof reproduces bit for bit (AGENTS.md trap 1)
+  and the tiles differ only by film. **Why the exposure is settled first:**
+  proofs used to force the balanced meter, which averaged a night frame of
+  fireworks to mid-grey (+4.4 EV against +1.5 under protect highlights): every
+  film was compared at the wrong exposure, and a refiner without the meter
+  could only reach for print brightness and a 4.6-stop placement.
 - **The numbers** (`ImageMetrics`, on the 8-bit sRGB proof the model sees):
   highlight and shadow clip fractions, mean luma, RMS contrast, Hasler–
   Süsstrunk colourfulness and the RG/YB cast — plus the engine's own latitude
   measurement (fraction of the scene below, within and above the medium).
-- **Refining is scoped.** `AIPrompts.refinable`: Film Exposure, print
+- **Refining is scoped.** `AIPrompts.refinable`: the meter, Film Exposure, print
   brightness, the Y/M shifts, pre-flash, grain and halation, and all of
   Post-Dev. Not the film or paper, the crop, the film edge, the date or the
   decode. Out-of-scope or out-of-range writes are refused whole. A Scene

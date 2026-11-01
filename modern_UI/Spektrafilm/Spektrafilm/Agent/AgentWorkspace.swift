@@ -270,7 +270,7 @@ final class AgentWorkspace {
             .appending(path: "spektralab-proofs-\(UUID().uuidString.prefix(8)).jpg")
         try ProofSheet.writeJPEG(sheet, to: file)
         return AgentResult(body: ["proofs": .array(proofs.map { $0.json(in: catalog) }),
-                                  "note": "Proofs share one neutral print: meter on, no filter shifts, no Scene Placement, no grain, glare or grade. latitude.within is the fraction of the frame the film and paper hold."],
+                                  "note": "Proofs share one neutral print: the frame's own exposure, no filter shifts, no Scene Placement, no grain, glare or grade. exposureEV is the Film Exposure each was printed at; latitude.within is the fraction of the frame the film and paper hold."],
                            preview: file)
     }
 

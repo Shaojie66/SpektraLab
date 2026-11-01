@@ -226,6 +226,18 @@ final class AIUnitTests: XCTestCase {
         XCTAssertNil(both.patch)
     }
 
+    func testAMeterIsReadStrictlyAndRefiningMayChangeIt() throws {
+        XCTAssertEqual(try AIPrompts.readMeter(["meter": "protect_highlights", "reason": "night"]).meter, .protectHighlights)
+        XCTAssertThrowsError(try AIPrompts.readMeter(["meter": "spot", "reason": ""]))
+        XCTAssertThrowsError(try AIPrompts.readMeter(["reason": "no meter"]))
+        XCTAssertNoThrow(try AIPrompts.checkScope(["params": ["autoExposure": true, "autoExposureMethod": "protect_highlights"]]))
+        XCTAssertThrowsError(try AIPrompts.checkScope(["params": ["autoExposureMethod": "spot"]]), "only the four meters")
+        XCTAssertTrue(AIPrompts.refinerSystem.contains("Exposure first, and on the negative"))
+        XCTAssertTrue(AIPrompts.exposureSystem.contains("protect_highlights"))
+        XCTAssertEqual(AIPrompts.exposureSchema["properties"]?["meter"]?["enum"],
+                       .array(ExposureMethod.allCases.map { .string($0.rawValue) }))
+    }
+
     func testTheRefinerIsToldToKeepWhatLiesOutsideTheIntent() {
         let text = AIPrompts.refinerSystem
         XCTAssertTrue(text.contains("outside the intent"))
@@ -275,10 +287,11 @@ final class AIUnitTests: XCTestCase {
         p.glareActive = true
         p.filmEdge.active = true
         p.sceneLatitude.active = true
+        p.autoExposureMethod = "protect_highlights"
         let q = ProofSheet.proofParams(from: p)
-        XCTAssertEqual(q.exposureCompensationEV, 0)
+        XCTAssertEqual(q.exposureCompensationEV, 1.5, "the frame's own exposure is kept: it is the scene's, not the film's")
+        XCTAssertEqual(q.autoExposureMethod, "protect_highlights")
         XCTAssertEqual(q.yFilterShift, 0)
-        XCTAssertTrue(q.autoExposure)
         XCTAssertFalse(q.grainActive, "grain at proof size is aliasing")
         XCTAssertFalse(q.glareActive, "glare is the one unseeded stage (AGENTS.md trap 1)")
         XCTAssertFalse(q.filmEdge.active)
@@ -483,6 +496,75 @@ final class AISessionTests: XCTestCase {
         XCTAssertEqual(s.adjustments.contrast, 23, "the window's own file is not someone else's edit")
     }
 
+    /// The exposure sheet: one film under each meter, each proof printed at
+    /// the Film Exposure its meter chose.
+    func testTheExposureSheetVariesOnlyTheMeter() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        let candidates = ExposureMethod.allCases.map {
+            ProofCandidate(film: "kodak_portra_400", paper: "kodak_portra_endura", meter: $0.rawValue)
+        }
+        let proofs = try await ProofSheet.render(session: ws.session, candidates: candidates, longEdge: 256)
+        XCTAssertEqual(proofs.count, 4)
+        XCTAssertTrue(proofs.allSatisfy { $0.exposureEV != nil }, "each proof says what it was exposed at")
+        XCTAssertGreaterThan(Set(proofs.compactMap { $0.exposureEV.map { ($0 * 100).rounded() } }).count, 1,
+                             "the meters disagree on this frame, so the sheet shows a choice")
+        XCTAssertNotNil(ProofSheet.contactSheet(proofs, columns: 2))
+    }
+
+    /// Recommend on an untouched frame: the exposure is chosen first and set on
+    /// the frame, the films are proofed at it, and Undo AI changes takes the
+    /// meter back with everything else.
+    func testRecommendChoosesTheExposureBeforeTheFilms() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        let s = ws.session
+        XCTAssertEqual(s.params.autoExposureMethod, "balanced")
+        let script = Script([
+            ["meter": "protect_highlights", "reason": "a bright source against dark"],
+            ["summary": "s", "ranking": [["index": 1, "score": 90, "reason": "r"]]],
+        ])
+        let assistant = AIAssistant(session: s)
+        assistant.makeClient = { AIClient(kind: .anthropic, model: "claude-opus-5-5", baseURL: "", apiKey: "k", transport: script) }
+        assistant.recommendFilm()
+        try await Task.sleep(for: .milliseconds(50))
+        while assistant.busy { try await Task.sleep(for: .milliseconds(100)) }
+
+        XCTAssertNil(assistant.error, assistant.error ?? "")
+        XCTAssertEqual(script.sent.count, 2, "one call for the exposure, one for the films")
+        XCTAssertTrue(script.sent[0]["system"]?.string?.contains("four meters") == true
+                      || script.sent[0]["system"]?.string?.contains("each of the camera's meters") == true)
+        XCTAssertEqual(s.params.autoExposureMethod, "protect_highlights", "the chosen meter is on the frame")
+        XCTAssertTrue(s.params.autoExposure)
+        XCTAssertEqual(assistant.exposureChoice?.byAI, true)
+        XCTAssertNotNil(assistant.recommendation)
+        XCTAssertTrue(assistant.canUndo)
+        assistant.undoAI()
+        XCTAssertEqual(s.params.autoExposureMethod, "balanced", "Undo AI changes takes the meter back")
+    }
+
+    /// An exposure the person set is theirs: no exposure call, nothing changed.
+    func testRecommendKeepsAnExposureThePersonSet() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        let s = ws.session
+        _ = try await ws.edit(["params": ["autoExposureMethod": "center"]])
+        let script = Script([["summary": "s", "ranking": [["index": 1, "score": 90, "reason": "r"]]]])
+        let assistant = AIAssistant(session: s)
+        assistant.makeClient = { AIClient(kind: .anthropic, model: "claude-opus-5-5", baseURL: "", apiKey: "k", transport: script) }
+        assistant.recommendFilm()
+        try await Task.sleep(for: .milliseconds(50))
+        while assistant.busy { try await Task.sleep(for: .milliseconds(100)) }
+
+        XCTAssertNil(assistant.error, assistant.error ?? "")
+        XCTAssertEqual(script.sent.count, 1, "no exposure call")
+        XCTAssertEqual(s.params.autoExposureMethod, "center")
+        XCTAssertEqual(assistant.exposureChoice?.byAI, false)
+    }
+
     /// Restoring an earlier edit is one step, and Undo takes it back.
     func testRestoringAnEditIsOneUndoableStep() async throws {
         let url = try syntheticFrame()
@@ -593,7 +675,16 @@ final class AIEndToEndTests: XCTestCase {
         print("E2E applied first pick; proofs compared:", rec.compared)
         for p in rec.picks { print("E2E pick \(p.index) \(p.candidate.film) \(p.score): \(p.reason)") }
         XCTAssertFalse(rec.picks.isEmpty)
-        XCTAssertEqual(s.sidecar, before, "recommending changes nothing")
+        // Recommending changes nothing a person can write but the meter it
+        // chose for the scene (fields the app resolves itself are re-derived).
+        let afterDoc = try s.agentDocument.json, beforeDoc = try AgentDocument(before).json
+        for field in AgentSchema.fields where field.readOnly == nil
+            && !["params.autoExposure", "params.autoExposureMethod"].contains(field.path) {
+            let path = field.path.split(separator: ".").map(String.init)
+            XCTAssertEqual(path.reduce(Optional(afterDoc)) { $0?[$1] }, path.reduce(Optional(beforeDoc)) { $0?[$1] },
+                           "recommending changed \(field.path)")
+        }
+        print("E2E exposure:", assistant.exposureChoice.map { "\($0.meter.title) byAI=\($0.byAI) \($0.reason)" } ?? "none")
 
         let pick = rec.picks[0]
         assistant.apply(pick)

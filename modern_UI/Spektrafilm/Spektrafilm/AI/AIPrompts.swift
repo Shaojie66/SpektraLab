@@ -13,11 +13,12 @@ import Foundation
 enum AIPrompts {
     // MARK: what refining may touch
 
-    /// The fields a refinement may write: the enlarger, the film's exposure,
+    /// The fields a refinement may write: the meter, the film's exposure, the enlarger,
     /// the effect strengths, and the whole of Post-Dev. Not the film or paper
     /// (that is the chooser's), not the crop, the film edge, the date or the
     /// decode.
     static let refinable = [
+        "params.autoExposure", "params.autoExposureMethod",
         "params.exposureCompensationEV", "params.printBrightnessStops",
         "params.yFilterShift", "params.mFilterShift", "params.preflashExposure",
         "params.grainActive", "params.halationActive", "params.effects.grain", "params.effects.halation",
@@ -42,15 +43,69 @@ enum AIPrompts {
         Localization.shared.resolved == .simplifiedChinese ? "Simplified Chinese" : "English"
     }
 
+    // MARK: choosing the exposure
+
+    static var exposureSystem: String {
+        """
+        You are a photographer deciding how a photograph should be exposed onto film in SpektraLab, a \
+        physically modelled film and print simulation, before any film is chosen. You are shown one film \
+        printed four times, once under each of the camera's meters, numbered, with the Film Exposure each \
+        meter chose. The film and the print are the same in all four; only the exposure differs.
+
+        Choose the meter whose print is exposed the way this scene should be: \
+        balanced averages the frame to mid-grey and suits ordinary, evenly lit scenes; \
+        center weights the middle; \
+        protect_highlights keeps the brightest parts from blowing out and lets the rest fall dark — the \
+        choice for night scenes, fireworks, lit windows, stage lights and anything against a bright source, \
+        where averaging would lift a black sky to grey; \
+        protect_shadows keeps dark parts open — for scenes dominated by bright areas such as snow, beach or \
+        a bright sky, where averaging would make them grey and the subject too dark. \
+        Judge by the pictures: a night sky should stay dark, a bright scene should stay bright, and the \
+        subject should read. The reason is one or two sentences in \(language): what the scene is and why \
+        this meter's print is right.
+        """
+    }
+
+    static let exposureSchema: JSONValue = [
+        "type": "object", "additionalProperties": false, "required": ["meter", "reason"],
+        "properties": [
+            "meter": ["type": "string", "enum": .array(ExposureMethod.allCases.map { .string($0.rawValue) })],
+            "reason": ["type": "string"],
+        ],
+    ]
+
+    static func exposureUser(proofs: [ProofSheet.Proof], exif: EXIFReadout?, intent: String) -> String {
+        var lines = ["The exposure sheet above, one film under each meter:"]
+        for p in proofs {
+            let ev = p.exposureEV.map { String(format: "%+.2f", $0) } ?? "?"
+            var row = "\(p.index). \(p.candidate.meter ?? "?") — Film Exposure \(ev) EV, luma \(f(p.metrics.meanLuma)), "
+                + "highlight clip \(pct(p.metrics.highlightClip)), shadow clip \(pct(p.metrics.shadowClip))"
+            if let l = p.latitude { row += ", beyond the medium above \(pct(l.above))" }
+            lines.append(row)
+        }
+        lines.append(shot(exif))
+        lines.append(wish(intent))
+        return lines.joined(separator: "\n")
+    }
+
+    /// The meter the model chose, refused unless it is one of the four.
+    static func readMeter(_ answer: JSONValue) throws -> (meter: ExposureMethod, reason: String) {
+        guard let raw = answer["meter"]?.string, let m = ExposureMethod(rawValue: raw) else {
+            throw AIError.badReply("meter is not one of \(ExposureMethod.allCases.map(\.rawValue).joined(separator: ", "))")
+        }
+        return (m, answer["reason"]?.string ?? "")
+    }
+
     // MARK: choosing a film
 
     static var chooserSystem: String {
         """
         You are a film photographer and darkroom printer choosing a film stock for a photograph in SpektraLab, \
         a physically modelled film and print simulation. You are shown a numbered contact sheet: the same \
-        photograph printed on several film and paper pairs through one identical neutral print — the meter on, \
-        the enlarger's filter pack solved to neutral, no grade, no grain. So differences between tiles are the \
-        films' and papers' own colour, contrast and latitude.
+        photograph printed on several film and paper pairs through one identical neutral print — the same \
+        exposure for every film (already chosen for this scene), the enlarger's filter pack solved to neutral, \
+        no grade, no grain. So differences between tiles are the films' and papers' own colour, contrast and \
+        latitude.
 
         Judge which films suit this photograph: its subject (skin, foliage, sky, interiors, night), its light \
         (daylight, tungsten, mixed, dim), its contrast, and the person's intent when they give one. Prefer films \
@@ -121,13 +176,21 @@ enum AIPrompts {
         You are a darkroom printer refining a print in SpektraLab, a physically modelled film and print \
         simulation. The film and paper are chosen; you change only the fields listed, never others.
 
-        The process runs in order. First the physical stages: Film Exposure (stops on the negative), the \
+        The process runs in order. First the physical stages: the meter and Film Exposure (stops on the \
+        negative), the \
         enlarger's print brightness (stops) and its yellow and magenta filter shifts (the print's colour \
         balance: +Y is yellower, −Y bluer; +M more magenta, −M greener), and Scene Placement, which pulls \
         highlights or shadows the medium cannot hold back inside it. Then Post-Dev, a grade on the scan: white \
         balance, exposure, contrast, brightness, highlights, shadows, black and white point, saturation, colour \
         balance, curves, vignette. Correct colour with the filter shifts and density with print brightness \
         before reaching for Post-Dev; use Post-Dev for taste.
+
+        Exposure first, and on the negative. If the print is too bright or too dark overall — a night sky gone \
+        grey, a snow scene gone dull — fix it with the meter (autoExposure on, autoExposureMethod: \
+        protect_highlights for night, fireworks, stage and backlit scenes; protect_shadows for snow, beach and \
+        bright skies; balanced or center otherwise) or with Film Exposure, not with print brightness: print \
+        brightness only fine-tunes a print whose negative is right. Scene Placement is for a scene the medium \
+        cannot hold even when well exposed, never a cure for an overexposed negative.
 
         A filter shift moves every colour in the print, not only the ones the intent names. Each round, \
         check what lies outside the intent — a blue sky, whites and greys, skin, foliage that is not the \

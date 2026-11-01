@@ -72,7 +72,7 @@ enum AgentTools {
                            "preview": wantPreview],
               required: ["path", "highlight", "shadow"]),
         .init(name: "compare_stocks", command: "compare",
-              summary: "Print the image small on several films at once and return a numbered contact sheet, with each proof's clipping, brightness, contrast, colourfulness, cast and the fraction of the frame the film holds. All proofs share one neutral print, so they compare films, not grades. Use it to choose a film, then set it with edit_image. Changes nothing.",
+              summary: "Print the image small on several films at once and return a numbered contact sheet, with each proof's clipping, brightness, contrast, colourfulness, cast and the fraction of the frame the film holds. All proofs share one neutral print at the frame's own exposure, so they compare films, not grades; set the meter first (params.autoExposureMethod, e.g. protect_highlights for a night scene) if the frame is not exposed right. Use it to choose a film, then set it with edit_image. Changes nothing.",
               properties: ["path": path,
                            "films": ["type": "array", "items": ["type": "string"],
                                      "description": "Film ids to compare, each on its declared paper (default: the current film, then every colour film, push processes aside)."],
