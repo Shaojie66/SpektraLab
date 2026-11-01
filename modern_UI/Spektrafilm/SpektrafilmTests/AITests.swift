@@ -611,6 +611,13 @@ final class AIEndToEndTests: XCTestCase {
         let out = env["SPK_AI_OUT"] ?? "/tmp/spk-test/e2e-refined.jpg"
         let preview = try await ws.preview(to: URL(fileURLWithPath: out), longEdge: 1024)
         print("E2E preview:", preview.path)
+        // The finished print at the photograph's own size, before Undo below
+        // takes the edit back: what Export would write, as a JPEG.
+        if let full = env["SPK_AI_FULL"] {
+            let edge = min(4096, max(64, Int(s.sourceLongEdge)))
+            let file = try await ws.preview(to: URL(fileURLWithPath: full), longEdge: edge)
+            print("E2E full:", file.path, edge)
+        }
 
         XCTAssertTrue(assistant.canUndo)
         assistant.undoAI()
