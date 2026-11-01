@@ -450,6 +450,26 @@ final class AISessionTests: XCTestCase {
         try await ws.settle()
     }
 
+    /// The sidecar watcher must recognise the window's own last write. A
+    /// field whose codec is not an identity (a nil date-back camera reads back
+    /// as 135) made the file look written elsewhere, and the watcher adopted
+    /// it over every edit made since — which is how a Scene Placement placed
+    /// through the agent layer vanished on the next settle.
+    func testTheWatcherDoesNotTakeBackAnEditOverTheWindowsOwnWrite() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        try await ws.develop()
+        let s = ws.session
+        s.sidecar.params.dateBack.camera = nil
+        s.flushSave()
+        var a = s.adjustments
+        a.contrast = 23
+        s.adjustments = a                 // an edit not yet written
+        s.sidecarStoreChanged()           // the watcher's burst for the write above
+        XCTAssertEqual(s.adjustments.contrast, 23, "the window's own file is not someone else's edit")
+    }
+
     /// Restoring an earlier edit is one step, and Undo takes it back.
     func testRestoringAnEditIsOneUndoableStep() async throws {
         let url = try syntheticFrame()
