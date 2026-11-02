@@ -138,16 +138,26 @@ detected locally, free and with no network. The mask covers the face outline wit
 the forehead added, cuts out the eyes, brows, lips and nose so the features stay
 sharp, and is pulled in and feathered at the edge, leaving the hairline and
 background alone. Neck and body skin are not touched. It removes mid-scale blotches
-and unevenness while keeping the finer pore texture and the coarser light and shade of
-the face. The scale follows the size of the face, so the same strength means the same
-thing in a close-up and in a group shot. The smoothing happens
+and unevenness while keeping the coarser light and shade of the face, and by default
+the finer pore texture too. The scale is worked out from each face's own size, so a
+small face at the back of a group shot is not over-smoothed. Strong lines (glasses frames, strands of hair) and the pixels beside
+them are protected from softening; fine texture such as pores is not affected by that
+protection. The higher the strength, the larger the scale of blotch it removes: at 100,
+about 93 % of a medium blotch is removed, while the face's own
+light and shade is still kept. Suggested use: 30–60 for small faces in a group
+shot, up to 100 for a close-up. **Soft skin**, a switch under the slider in the
+Portrait section, can be turned on only when the strength is above 0. It also softens the
+finer skin texture (pores) for cleaner skin; the film grain still lies on top. Like the
+strength, it is stored with the photo's settings, can be undone, and is not copied
+with copy/paste settings. The smoothing happens
 before the film: the raw decode is retouched, then handed to the engine, so grain,
 halation and the paper curve still fall on the skin and the face does not become a
 smooth plastic patch in a grained picture. This is the one retouching exception in
 this fork; nothing else is edited after the print. Changing the strength re-prints
 the photo, about 1–2 seconds for a large image. **Refine** may also set it, only when
 a face is present: usually 0.2–0.4 for a natural portrait, and none when people are
-small or only background. In a test, local `gemma4:26b` set 0.3 for the intent
+small or only background; it turns Soft skin on only when you explicitly ask for
+clean, soft or beauty-style skin. In a test, local `gemma4:26b` set 0.3 for the intent
 "natural portrait skin". Copy and paste settings does not copy it, since every
 photo has different faces. Half-frame pairs are not yet supported.
 
