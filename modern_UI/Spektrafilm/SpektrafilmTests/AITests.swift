@@ -566,6 +566,29 @@ final class SkinTests: XCTestCase {
         XCTAssertLessThan(at(0.5, 0.2), 0.05, "outside the face is out")
     }
 
+    /// A group's small faces are looked for on overlapping tiles: the tiles
+    /// cover the picture with room for a face across each seam, and a face
+    /// seen on several tiles — or cut in half by one — is one face.
+    func testFacesAreLookedForOnOverlappingTilesAndMerged() {
+        let size = CGSize(width: 2048, height: 1536)
+        let tiles = SkinMask.tileRects(size, n: 3)
+        XCTAssertEqual(tiles.count, 10, "the whole picture and nine tiles")
+        XCTAssertEqual(tiles[0], CGRect(origin: .zero, size: size))
+        let union = tiles.dropFirst().reduce(CGRect.null) { $0.union($1) }
+        XCTAssertEqual(union, CGRect(origin: .zero, size: size), "the tiles cover it")
+        let a = tiles[1], b = tiles[2]                                  // one above the other
+        XCTAssertGreaterThan(a.intersection(b).height, 150, "a 150 px face across the seam is whole on one tile")
+        XCTAssertEqual(SkinMask.tileRects(size, n: 1), [CGRect(origin: .zero, size: size)])
+
+        let face = CGRect(x: 100, y: 100, width: 40, height: 40)
+        let again = face.offsetBy(dx: 2, dy: 1)                         // the same face on the next tile
+        let half = CGRect(x: 100, y: 100, width: 40, height: 18)       // the half a seam left
+        let neighbour = CGRect(x: 150, y: 100, width: 40, height: 40)  // touching, another face
+        let kept = SkinMask.merged([half, face, neighbour, again])
+        XCTAssertEqual(kept.count, 2, "\(kept)")
+        XCTAssertTrue(kept.contains(neighbour))
+    }
+
     func testNothingIsDoneAtZeroOrWithoutAFace() {
         let input = Self.frame()
         XCTAssertTrue(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 0) === input)

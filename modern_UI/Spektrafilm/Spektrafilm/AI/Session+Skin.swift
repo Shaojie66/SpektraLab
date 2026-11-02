@@ -1,7 +1,7 @@
 //  Session+Skin.swift — the faces in the open frame, for skin smoothing
 //  (ARCHITECTURE §7.4, §7.14).
 //
-//  Found once per frame and decode on a small render of Apple's own
+//  Found once per frame and decode on a 2048 px render of Apple's own
 //  rendering of the decode (what Vision's face models are trained on), and
 //  kept, so a change of strength is a re-open and not a re-detection.
 
@@ -10,8 +10,9 @@ import CoreImage
 import Foundation
 
 extension Session {
-    /// The long edge faces are looked for at.
-    nonisolated static let skinDetectionLongEdge: CGFloat = 1024
+    /// The long edge faces are looked for at: tiled (`SkinMask.detect`), so
+    /// the faces at the back of a group keep enough pixels to be found.
+    nonisolated static let skinDetectionLongEdge: CGFloat = 2048
 
     /// The skin in `d`, the decode of `url`: from the cache when the frame
     /// and its decode settings are the same, found otherwise. Empty when no

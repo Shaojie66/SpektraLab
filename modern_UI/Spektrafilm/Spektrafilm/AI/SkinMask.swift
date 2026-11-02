@@ -1,6 +1,6 @@
 //  SkinMask.swift — where the skin is, found on this Mac (ARCHITECTURE §7.14).
 //
-//  Vision's face landmarks on a small render of the decode: for each face the
+//  Vision's face boxes, then landmarks, on a render of the decode: for each face the
 //  jaw line and brows give the face's outline, raised over the forehead; the
 //  eyes, brows, lips and nose are cut out of it so they stay sharp; the edge
 //  is pulled in and feathered so the hairline and the background are left
@@ -38,30 +38,108 @@ struct SkinMask: Sendable {
     /// How far over the brows the forehead is taken, as a share of the face box.
     static let forehead = 0.18
 
-    static func detect(_ image: CGImage) throws -> SkinMask {
-        let request = VNDetectFaceLandmarksRequest()
-        try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+    /// The faces in `image`, in three steps, because Vision's own search
+    /// shrinks what it is given and loses the small faces of a group:
+    /// face boxes on the whole picture and on `tiles`×`tiles` overlapping
+    /// tiles, merged; then each face's landmarks on its own crop, enlarged.
+    /// Measured on a 1440 px group of about 25: the landmark request alone
+    /// found 6, the boxes on 3×3 tiles 20, each with landmarks on its crop;
+    /// on a 1027 px group of 10, 6 against 8. Enlarging the whole picture
+    /// found no more — the search shrinks it back.
+    static func detect(_ image: CGImage, tiles: Int = 3) throws -> SkinMask {
         let size = CGSize(width: image.width, height: image.height)
-        func points(_ r: VNFaceLandmarkRegion2D?) -> [CGPoint] {
-            (r?.pointsInImage(imageSize: size) ?? []).map { CGPoint(x: $0.x / size.width, y: $0.y / size.height) }
+        var boxes: [CGRect] = []
+        for tile in tileRects(size, n: tiles) {
+            guard let crop = image.cropping(to: tile) else { continue }
+            let request = VNDetectFaceRectanglesRequest()
+            try VNImageRequestHandler(cgImage: crop, options: [:]).perform([request])
+            boxes += (request.results ?? []).map { pixelRect($0.boundingBox, in: tile, of: size) }
         }
-        let faces: [Face] = (request.results ?? []).compactMap { f in
-            guard let l = f.landmarks else { return nil }
-            let jaw = points(l.faceContour)
-            guard jaw.count >= 3 else { return nil }
-            let box = f.boundingBox
-            // The brows' points lifted over the forehead, right to left, close
-            // the outline the jaw opens.
-            let lift = box.height * forehead
-            let brows = (points(l.leftEyebrow) + points(l.rightEyebrow))
-                .map { CGPoint(x: $0.x, y: $0.y + lift) }
-                .sorted { $0.x > $1.x }
-            let jawLeftToRight = jaw.first!.x <= jaw.last!.x ? jaw : jaw.reversed()
-            let features = [l.leftEye, l.rightEye, l.leftEyebrow, l.rightEyebrow, l.outerLips, l.nose]
-                .map(points).filter { $0.count >= 3 }
-            return Face(box: box, outline: jawLeftToRight + brows, features: features)
-        }
+        let faces = merged(boxes).compactMap { face(in: image, at: $0) }
         return SkinMask(faces: faces)
+    }
+
+    /// The whole picture, then `n`×`n` tiles overlapping by `overlap` of a
+    /// tile: pixel rects, top-left origin (`CGImage.cropping`'s).
+    static func tileRects(_ size: CGSize, n: Int, overlap: CGFloat = 0.3) -> [CGRect] {
+        let whole = CGRect(origin: .zero, size: size)
+        guard n > 1 else { return [whole] }
+        let tw = size.width / (CGFloat(n) - CGFloat(n - 1) * overlap)
+        let th = size.height / (CGFloat(n) - CGFloat(n - 1) * overlap)
+        var out = [whole]
+        for i in 0..<n {
+            for j in 0..<n {
+                out.append(CGRect(x: CGFloat(i) * tw * (1 - overlap), y: CGFloat(j) * th * (1 - overlap),
+                                  width: tw, height: th).integral.intersection(whole))
+            }
+        }
+        return out
+    }
+
+    /// The same face found on several tiles is one: largest first, a box
+    /// that lies mostly (half of the smaller) inside one kept is dropped —
+    /// which also drops the half of a big face a tile's edge cut off.
+    static func merged(_ boxes: [CGRect]) -> [CGRect] {
+        var kept: [CGRect] = []
+        for b in boxes.sorted(by: { $0.width * $0.height > $1.width * $1.height }) {
+            let seen = kept.contains { k in
+                let i = k.intersection(b)
+                return !i.isNull && i.width * i.height > 0.5 * min(k.width * k.height, b.width * b.height)
+            }
+            if !seen { kept.append(b) }
+        }
+        return kept
+    }
+
+    /// Vision's normalised rect (bottom-left) on `tile` as a pixel rect of
+    /// the whole picture (top-left).
+    private static func pixelRect(_ r: CGRect, in tile: CGRect, of size: CGSize) -> CGRect {
+        CGRect(x: tile.minX + r.minX * tile.width, y: tile.minY + (1 - r.maxY) * tile.height,
+               width: r.width * tile.width, height: r.height * tile.height)
+    }
+
+    /// The face whose box is `box` (pixels, top-left), from landmarks found
+    /// on a crop twice its size enlarged to at least `cropShort` pixels.
+    static let cropShort: CGFloat = 256
+
+    private static func face(in image: CGImage, at box: CGRect) -> Face? {
+        let size = CGSize(width: image.width, height: image.height)
+        let r = box.insetBy(dx: -box.width / 2, dy: -box.height / 2)
+            .intersection(CGRect(origin: .zero, size: size)).integral
+        guard !r.isEmpty, let crop = image.cropping(to: r) else { return nil }
+        let k = max(1, cropShort / CGFloat(min(crop.width, crop.height)))
+        var input = CIImage(cgImage: crop)
+        if k > 1 {
+            input = input.applyingFilter("CILanczosScaleTransform",
+                                         parameters: [kCIInputScaleKey: k, kCIInputAspectRatioKey: 1])
+        }
+        let request = VNDetectFaceLandmarksRequest()
+        guard (try? VNImageRequestHandler(ciImage: input, options: [:]).perform([request])) != nil else { return nil }
+        // The face nearest the crop's centre: a neighbour's may be in it too.
+        let centre = CGPoint(x: 0.5, y: 0.5)
+        func distance(_ f: VNFaceObservation) -> CGFloat { hypot(f.boundingBox.midX - centre.x, f.boundingBox.midY - centre.y) }
+        guard let f = (request.results ?? []).min(by: { distance($0) < distance($1) }), let l = f.landmarks else { return nil }
+        // Crop-normalised (bottom-left) to picture-normalised (bottom-left).
+        let x0 = r.minX / size.width, y0 = (size.height - r.maxY) / size.height
+        let sx = r.width / size.width, sy = r.height / size.height
+        func map(_ p: CGPoint) -> CGPoint { CGPoint(x: x0 + p.x * sx, y: y0 + p.y * sy) }
+        func points(_ region: VNFaceLandmarkRegion2D?) -> [CGPoint] {
+            (region?.pointsInImage(imageSize: CGSize(width: 1, height: 1)) ?? []).map(map)
+        }
+        let jaw = points(l.faceContour)
+        guard jaw.count >= 3 else { return nil }
+        let b = f.boundingBox
+        let faceBox = CGRect(x: x0 + b.minX * sx, y: y0 + b.minY * sy, width: b.width * sx, height: b.height * sy)
+        // The brows' points lifted over the forehead, right to left, close
+        // the outline the jaw opens.
+        let lift = faceBox.height * forehead
+        let brows = (points(l.leftEyebrow) + points(l.rightEyebrow))
+            .map { CGPoint(x: $0.x, y: $0.y + lift) }
+            .sorted { $0.x > $1.x }
+        let jawLeftToRight = jaw.first!.x <= jaw.last!.x ? jaw : jaw.reversed()
+        let features = [l.leftEye, l.rightEye, l.leftEyebrow, l.rightEyebrow, l.outerLips, l.nose]
+            .map(points).filter { $0.count >= 3 }
+        return Face(box: faceBox, outline: jawLeftToRight + brows, features: features)
     }
 
     /// What `draw` puts on the page.
