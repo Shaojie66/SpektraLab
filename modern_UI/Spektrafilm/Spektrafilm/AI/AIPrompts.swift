@@ -246,7 +246,8 @@ enum AIPrompts {
         before the film, so the grain stays. Use it only when faces were found and the person wants a \
         portrait cleaned up or the skin is clearly blotchy: about 0.2–0.4 for a natural portrait, rarely \
         above 0.6, and leave it at 0 for a scene where people are small or incidental. params.retouch.soft \
-        softens the finer texture as well — only when the person asks for clean, soft or beauty-style skin. \
+        softens the finer texture as well — only when the person asks for clean, soft or beauty-style skin; \
+        on fine grain or none it is held back by itself, since no grain is left to put the texture back. \
         Skin that looks waxy or flat has been smoothed too far. Changing it re-develops the frame, so set it once rather than \
         nudging it every round.
 

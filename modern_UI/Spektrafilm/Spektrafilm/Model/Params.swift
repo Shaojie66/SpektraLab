@@ -590,6 +590,33 @@ struct FilmParams: Codable, Equatable, Sendable {
     /// file for the Grade control this does not have yet.
     nonisolated static let multigradeFilter2: (c: Double, m: Double, y: Double) = (0, 0, 68)
 
+    /// How coarse the grain lands on the picture, against 35 mm at the
+    /// film's own grain: the strength sent, over the frame's size on the wire
+    /// (a frame twice as long has grain half the size against the picture).
+    /// 0 with grain off. Colour films share one grain model, so for them it
+    /// is the Grain slider and the format; the black-and-white films have
+    /// their own (`ownGrain`).
+    var grainCoarseness: Double {
+        guard grainActive else { return 0 }
+        let amount = (effects.grain * FilmParams.ownGrain(of: filmStock)).clamped(to: EffectStrengths.grainRange)
+        return amount * 36 / max(wireFilmFormatMM, 1)
+    }
+
+    /// The share of soft skin this look carries (`RetouchSettings.softShare`);
+    /// 0 when it is off.
+    var softSkinShare: Double {
+        retouch.soft ? RetouchSettings.softShare(grain: grainCoarseness) : 0
+    }
+
+    /// What the engine's frame carries of the retouch, for the framing key and
+    /// the print stamp: nil when nothing is retouched, so every frame without
+    /// it keys and stamps exactly as before.
+    var retouchKey: String? {
+        guard retouch.isActive else { return nil }
+        let soft = softSkinShare
+        return String(format: "skin=%.3f", retouch.skinSmoothing) + (soft > 0 ? String(format: ";soft=%.1f", soft) : "")
+    }
+
     /// What the Grain strength's 1 is on a black-and-white film: the
     /// `grain_amount` at which the engine renders the diffuse RMS granularity
     /// its maker publishes (owner's decision of 2026-10-07 that a film's grain
@@ -898,12 +925,19 @@ struct RetouchSettings: Codable, Equatable, Sendable {
 
     var isActive: Bool { skinSmoothing > 0 }
 
-    /// What the engine's frame carries of this, for the framing key and the
-    /// print stamp: nil when nothing is retouched, so every frame without it
-    /// keys and stamps exactly as before.
-    var key: String? {
-        guard isActive else { return nil }
-        return String(format: "skin=%.3f", skinSmoothing) + (soft ? ";soft" : "")
+    /// Soft skin's share on bare film: what is left of it with no grain to
+    /// put the texture back (`FilmParams.grainCoarseness` 0).
+    static let softFloor = 0.4
+
+    /// How much of soft skin a grain `grain` coarse carries: all of it from
+    /// 35 mm at the film's own grain up, down to `softFloor` with none, in
+    /// steps of a tenth. Soft skin takes off texture finer than the blotches;
+    /// coarse grain lands over it and the skin still reads as skin, fine
+    /// grain does not and it reads as wax. The steps are because a change is
+    /// a re-developed frame: a nudge of the grain should not cost one.
+    static func softShare(grain: Double) -> Double {
+        let share = min(1, max(softFloor, softFloor + (1 - softFloor) * grain))
+        return (share * 10).rounded() / 10
     }
 
     init(skinSmoothing: Double = 0, soft: Bool = false) { self.skinSmoothing = skinSmoothing; self.soft = soft }

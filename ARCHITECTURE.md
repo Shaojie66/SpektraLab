@@ -585,7 +585,7 @@ through controls a person already has:
   on a drawn horizon is what caught it. Not under a film edge (the gate holds
   the ratio) or on a pair.
 - **Skin smoothing is a different frame, not a delta.** `RetouchSettings`
-  sits in `FilmParams` but off the wire; its `key` joins
+  sits in `FilmParams` but off the wire; `FilmParams.retouchKey` joins
   `FilmParams.engineFramingKey`, so a change of strength makes
   `requestPrint` release the engine's frame and re-develop from a retouched
   decode — the film edge's own mechanism for "the engine holds another
@@ -603,12 +603,22 @@ through controls a person already has:
   strength, from 4 % to 6 % of the face (a blotch a sixth of the face wide:
   ~70 % → ~93 % removed at full strength); not to 8 %, where the face's own
   shape at half its width lost ~40 %. **Soft skin**
-  (`RetouchSettings.soft`, in the framing key) adds 0.6 × the texture finer
-  than σ₁ — the pores the band keeps — for a cleaner look; the grain still
-  lands on it. The features are feathered apart from the skin's edge
-  (`SkinMask.featureFeather`, 1 %, cut 2 % past the landmarks): one 3 %
-  feather over everything filled an eye's hole back in and greyed the irises
-  at full strength. Core Image's component
+  (`RetouchSettings.soft`) adds 0.6 × the texture finer than σ₁ — the pores
+  the band keeps — for a cleaner look, **times a share that follows the
+  grain** (`FilmParams.softSkinShare`): the grain is what puts texture back,
+  so 35 mm at the film's own grain carries all of it and none carries 0.4,
+  by `FilmParams.grainCoarseness` (the strength sent, B&W films' own amounts
+  included, over the wire's frame against 36 mm), in steps of a tenth. The
+  share is in the framing key, so with soft skin on a change of grain, film or
+  format that moves it re-develops the frame; the steps keep a nudge from
+  doing so. Measured on an upscaled portrait at 24 MP scale, grain took the
+  fine skin texture from 1.7 to 6.1; at 1568 px it took it *down* (7.0 →
+  5.3) — grain sub-pixel there acts as diffusion — so the rule assumes a
+  camera-sized frame, where soft skin also has the most to take. The film
+  proofs develop one frame per share their candidates need. The features
+  are feathered apart from the skin's edge (`SkinMask.featureFeather`,
+  1 %, cut 2 % past the landmarks): one 3 % feather over everything filled
+  an eye's hole back in and greyed the irises at full strength. Core Image's component
   kernels only; every operand is opaque because Core Image stores colour
   premultiplied (a constant with alpha 0 multiplies to nothing), and the
   summed alpha is set back to 1. `SkinTests` measures it on known pixels

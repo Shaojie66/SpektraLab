@@ -2406,10 +2406,11 @@ final class Session: CanvasHost {
                 // The one retouch, before the film (ARCHITECTURE §7.4): the
                 // decode is smoothed where the skin is, then cut and handed on.
                 let retouch = sidecar.params.retouch
+                let soft = sidecar.params.softSkinShare
                 let skin = retouch.isActive && pair == nil ? await skinMask(for: d, url: url) : .none
                 guard selection == url, !Task.isCancelled else { return nil }
                 let frame = try await Task.detached(priority: .userInitiated) {
-                    let source = SkinSmoothing.apply(d.linear, mask: skin, strength: retouch.skinSmoothing, soft: retouch.soft)
+                    let source = SkinSmoothing.apply(d.linear, mask: skin, strength: retouch.skinSmoothing, soft: soft)
                     var image = Session.engineImage(source, size: d.pixelSize, cut: cut)
                     if let stops, let layout { image = PairComposer.exposed(image, layout: layout, stops: stops) }
                     return try ImageDecoder.engineFrame(from: image, device: device)
@@ -3631,7 +3632,7 @@ final class Session: CanvasHost {
     nonisolated static func printStamp(_ p: FilmParams) -> String {
         var stamp = p.wire.map { "\($0.name)=\($0.value)" }.joined(separator: ";")
         // The retouched decode is off the wire but in the picture.
-        if let r = p.retouch.key { stamp += ";" + r }
+        if let r = p.retouchKey { stamp += ";" + r }
         // With a film edge the crop is in the negative (`Session+FilmEdge`),
         // so the print is a different picture for every framing. Off, the
         // stamp is exactly what it always was.

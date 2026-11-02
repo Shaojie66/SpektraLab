@@ -29,7 +29,8 @@ enum SkinSmoothing {
     static let coarse = 0.04
     static let coarseReach = 0.5
     /// Soft skin: how much of the texture finer than σ₁ is softened, at full
-    /// strength, on top of the band.
+    /// strength and a whole share, on top of the band. The share follows the
+    /// grain (`RetouchSettings.softShare`).
     static let softness = 0.6
     /// The edge guard: `CIEdges` answers on the one or two pixels of an edge,
     /// and weakly — about 0.04 for a 0.15 step in linear light. Below
@@ -44,13 +45,14 @@ enum SkinSmoothing {
     static let edgeReach = 2.0
 
     /// `linear` with the skin smoothed by `strength` (0…1) where `mask` says
-    /// skin. The input, unchanged, when there is nothing to do.
+    /// skin, and `soft` (0…1) of soft skin's share on top. The input,
+    /// unchanged, when there is nothing to do.
     ///
     /// Each face is done at its own scale. A first version set the band from
     /// the median face, and in a group the small faces at the back were
     /// smoothed at the front faces' scale — their shape taken for blotches,
     /// their glasses' frames softened.
-    static func apply(_ linear: CIImage, mask: SkinMask, strength: Double, soft: Bool = false) -> CIImage {
+    static func apply(_ linear: CIImage, mask: SkinMask, strength: Double, soft: Double = 0) -> CIImage {
         let s = min(1, max(0, strength))
         let extent = linear.extent
         guard s > 0, !mask.isEmpty, !extent.isInfinite, extent.width > 0 else { return linear }
@@ -77,10 +79,10 @@ enum SkinSmoothing {
             let b1 = base.applyingGaussianBlur(sigma: sigma1).cropped(to: region)
             let b2 = base.applyingGaussianBlur(sigma: sigma2).cropped(to: region)
             var band = add(b2, multiply(b1, constant(-1, over: region)))             // b2 − b1
-            if soft {
-                // + softness × (b1 − img): the fine texture, softened too.
+            if soft > 0 {
+                // + softness × share × (b1 − img): the fine texture, softened too.
                 let fine = add(b1, multiply(base.cropped(to: region), constant(-1, over: region)))
-                band = add(band, multiply(fine, constant(softness, over: region)))
+                band = add(band, multiply(fine, constant(softness * min(1, soft), over: region)))
             }
             let w = multiply(multiply(m.cropped(to: region), keep.cropped(to: region)),
                              constant(s, over: region))                               // strength × mask × guard

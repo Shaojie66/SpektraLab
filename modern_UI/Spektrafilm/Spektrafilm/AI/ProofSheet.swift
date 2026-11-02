@@ -181,8 +181,21 @@ enum ProofSheet {
         // The proof is of the frame as it will print: retouched if it is.
         let retouch = session.params.retouch
         let skin = retouch.isActive ? await session.skinMask(for: decoded, url: session.selection!) : .none
-        let frame = try await Task.detached(priority: .userInitiated) {
-            let source = SkinSmoothing.apply(decoded.linear, mask: skin, strength: retouch.skinSmoothing, soft: retouch.soft)
+        // Soft skin's share follows the grain the print will have, which a
+        // candidate's film can change (`FilmParams.softSkinShare`): one frame
+        // per share, almost always one in all.
+        var frames: [Double: EngineFrame] = [:]
+        func frame(for film: String) async throws -> EngineFrame {
+            var print = session.params
+            print.filmStock = film
+            let soft = print.softSkinShare
+            if let made = frames[soft] { return made }
+            let made = try await develop(soft: soft)
+            frames[soft] = made
+            return made
+        }
+        func develop(soft: Double) async throws -> EngineFrame { try await Task.detached(priority: .userInitiated) {
+            let source = SkinSmoothing.apply(decoded.linear, mask: skin, strength: retouch.skinSmoothing, soft: soft)
             var image = Session.engineImage(source, size: decoded.pixelSize,
                                             cut: geometry.isIdentity ? nil : geometry)
             let long = max(image.extent.width, image.extent.height)
@@ -192,7 +205,7 @@ enum ProofSheet {
                                                           kCIInputAspectRatioKey: 1])
             }
             return try ImageDecoder.engineFrame(from: image, device: device)
-        }.value
+        }.value }
 
         let client = EngineClient(device: device, log: session.log)
         defer { Task { await client.stop() } }
@@ -221,7 +234,7 @@ enum ProofSheet {
             // will not take a preview edge under 800: the frame's own size is
             // what bounds the proof.
             let delta = Session.openDelta(sidecar: sc, previewLongEdge: max(800, longEdge))
-            let opened = try await client.open(frame, paramsDelta: delta)
+            let opened = try await client.open(try await frame(for: c.film), paramsDelta: delta)
             let solved = try await client.call(.solve, SolveRequest(sessionID: opened.sessionID, target: "both"),
                                                as: SolveResponse.self)
             let exposureEV = sc.params.autoExposure ? solved.solvedParams["exposure_compensation_ev"]

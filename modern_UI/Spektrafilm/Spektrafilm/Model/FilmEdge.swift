@@ -417,8 +417,9 @@ extension FilmParams {
         if filmEdge.effective { cut = filmEdge.framing }
         else { cut = dateBack.cutsFrame(filmEdge: filmEdge) ? dateBack.framing : nil }
         // A retouched decode is another frame for the engine: a change of
-        // strength is an open, as a change of cut is (`requestPrint`).
-        guard let r = retouch.key else { return cut }
+        // strength is an open, as a change of cut is (`requestPrint`) — and,
+        // with soft skin on, so is a change of how coarse the grain lands.
+        guard let r = retouchKey else { return cut }
         return (cut.map { $0 + ";" } ?? "") + r
     }
 

@@ -486,7 +486,7 @@ final class SkinTests: XCTestCase {
         let input = Self.frame()
         let before = Self.amplitudes(Self.pixels(input), x0: 40, x1: 200)
         let plain = Self.amplitudes(Self.pixels(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 1)), x0: 40, x1: 200)
-        let soft = Self.amplitudes(Self.pixels(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 1, soft: true)), x0: 40, x1: 200)
+        let soft = Self.amplitudes(Self.pixels(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 1, soft: 1)), x0: 40, x1: 200)
         XCTAssertGreaterThan(plain.checker, before.checker * 0.8, "without it, the texture stays")
         XCTAssertLessThan(soft.checker, before.checker * 0.55, "with it, the texture is softened (\(soft.checker))")
         XCTAssertLessThan(soft.blotch, before.blotch * 0.12, "and the blotch still goes")
@@ -496,6 +496,53 @@ final class SkinTests: XCTestCase {
         let plainKey = p.engineFramingKey
         p.retouch.soft = true
         XCTAssertNotEqual(p.engineFramingKey, plainKey, "soft skin is another frame for the engine")
+    }
+
+    /// Soft skin takes off fine texture the film's grain would put back; on
+    /// fine grain, or none, nothing puts it back and the skin goes waxy. So
+    /// its share follows how coarse the grain lands, 35 mm at the film's own
+    /// grain being the whole of it.
+    func testSoftSkinIsHeldBackOnFineGrain() {
+        XCTAssertEqual(RetouchSettings.softShare(grain: 0), RetouchSettings.softFloor, "no grain: the floor")
+        XCTAssertEqual(RetouchSettings.softShare(grain: 1), 1, "35 mm: all of it")
+        XCTAssertEqual(RetouchSettings.softShare(grain: 1.7), 1, "coarser: still all of it, never more")
+        XCTAssertEqual(RetouchSettings.softShare(grain: 0.48), 0.7, accuracy: 1e-9, "120: in steps of a tenth")
+
+        var p = FilmParams()
+        XCTAssertEqual(p.grainCoarseness, 1, accuracy: 1e-9, "35 mm at the film's own grain")
+        p.grainActive = false
+        XCTAssertEqual(p.grainCoarseness, 0)
+        p.grainActive = true
+        p.filmStock = "kodak_tri_x_400"
+        XCTAssertEqual(p.grainCoarseness, 1.7, accuracy: 1e-9, "a film's own grain counts")
+        p.filmStock = FilmParams().filmStock
+        p.filmFormatMM = 72
+        XCTAssertEqual(p.grainCoarseness, 0.5, accuracy: 1e-9, "a frame twice as long: grain half the size")
+
+        var q = FilmParams()
+        q.retouch = RetouchSettings(skinSmoothing: 0.5, soft: true)
+        XCTAssertEqual(q.softSkinShare, 1)
+        let coarse = q.engineFramingKey
+        q.grainActive = false
+        XCTAssertEqual(q.softSkinShare, RetouchSettings.softFloor)
+        XCTAssertNotEqual(q.engineFramingKey, coarse, "soft skin on bare film is another frame")
+        XCTAssertNotEqual(Session.printStamp(q), { var c = q; c.grainActive = true; return Session.printStamp(c) }())
+        q.retouch.soft = false
+        XCTAssertEqual(q.softSkinShare, 0)
+        let plain = q.engineFramingKey
+        q.grainActive = true
+        XCTAssertEqual(q.engineFramingKey, plain, "without soft skin the grain moves no frame")
+        q.retouch.soft = true
+        q.effects.grain = 1.05
+        XCTAssertEqual(q.engineFramingKey, coarse, "a nudge of the grain inside a step moves no frame")
+
+        let input = Self.frame()
+        let full = Self.amplitudes(Self.pixels(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 1, soft: 1)), x0: 40, x1: 200)
+        let held = Self.amplitudes(Self.pixels(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 1,
+                                                                    soft: RetouchSettings.softFloor)), x0: 40, x1: 200)
+        let none = Self.amplitudes(Self.pixels(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 1)), x0: 40, x1: 200)
+        XCTAssertGreaterThan(held.checker, full.checker * 1.3, "held back, more texture is kept (\(held.checker) vs \(full.checker))")
+        XCTAssertLessThan(held.checker, none.checker * 0.95, "but some is still softened")
     }
 
     /// The features stay out of the mask whatever the feather: an eye is
@@ -1267,15 +1314,24 @@ final class SkinPhotoTests: XCTestCase {
         if let d = s.decoded, let m = mask.render(width: Int(d.pixelSize.width / 4), height: Int(d.pixelSize.height / 4)) {
             try? ProofSheet.writeJPEG(m, to: out.appending(path: "skin-mask.jpg"))
         }
+        // The rest of the look, e.g. `{"params":{"grainActive":false}}`, and
+        // a tag for the file names, to compare one portrait under several.
+        if let patch = env["SPK_SKIN_PATCH"] {
+            _ = try await ws.edit(try JSONValue.parse(patch))
+            try await ws.settle()
+        }
+        let tag = env["SPK_SKIN_TAG"].map { "-" + $0 } ?? ""
         let edge = min(4096, Int(s.sourceLongEdge))
-        _ = try await ws.preview(to: out.appending(path: "skin-0.jpg"), longEdge: edge)
+        _ = try await ws.preview(to: out.appending(path: "skin-0\(tag).jpg"), longEdge: edge)
         let strength = Double(env["SPK_SKIN_STRENGTH"] ?? "0.6") ?? 0.6
         let soft = env["SPK_SKIN_SOFT"] != nil
         _ = try await ws.edit(["params": ["retouch": ["skinSmoothing": .number(strength), "soft": .bool(soft)]]])
         try await ws.settle()
         XCTAssertNotNil(s.engineFraming)
-        _ = try await ws.preview(to: out.appending(path: "skin-\(Int((strength * 100).rounded()))\(soft ? "-soft" : "").jpg"),
+        _ = try await ws.preview(to: out.appending(path: "skin-\(Int((strength * 100).rounded()))\(soft ? "-soft" : "")\(tag).jpg"),
                                  longEdge: edge)
+        print("SKIN grain:", s.params.grainCoarseness, "soft share:", s.params.softSkinShare,
+              "format:", s.params.wireFilmFormatMM)
         print("SKIN wrote", out.path)
     }
 }
