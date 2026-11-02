@@ -150,7 +150,16 @@ about 93 % of a medium blotch is removed, while the face's own
 light and shade is still kept. Suggested use: 30–60 for small faces in a group
 shot, up to 100 for a close-up. **Soft skin**, a switch under the slider in the
 Portrait section, can be turned on only when the strength is above 0. It also softens the
-finer skin texture (pores) for cleaner skin; the film grain still lies on top. Like the
+finer skin texture (pores) for cleaner skin; the film grain still lies on top. Because
+grain is what puts texture back over the skin, how much of Soft skin applies follows how
+coarse the grain lands: 35 mm at the film's own grain gets all of it, finer grain (medium
+format, a lower Grain slider) gets less, and with grain off it is held to 40 %, in steps
+of 10 %. Grain coarseness here is Grain on/off × the Grain slider × the film's own grain
+amount (only the four black-and-white films differ; colour films share one grain model) ÷
+the film format size relative to 35 mm. The Portrait panel says so under the toggle when
+it is held back (for example "Held to 70%"). With Soft skin on, a change to grain, film or
+format that moves the cap re-develops the frame (a second or two); small slider nudges
+usually do not. Like the
 strength, it is stored with the photo's settings, can be undone, and is not copied
 with copy/paste settings. The smoothing happens
 before the film: the raw decode is retouched, then handed to the engine, so grain,
