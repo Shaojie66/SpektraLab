@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=a92ed78; updated=2026-11-02 -->
+<!-- README_SYNC: source=1c8777a; updated=2026-11-02 -->
 [English](README.md) · **简体中文**
 
 # spektralab-ai
@@ -6,10 +6,10 @@
 [SpektraLab™](https://github.com/JamesQiu2005/SpektraLab)（macOS 胶片与相纸模拟器）的非官方 fork，
 加上了 AI：帮你选胶片、推荐构图、精修成片、给人像磨皮——可以用本机的 Ollama，也可以用 Claude。
 
-如果它对你有用，点个 ⭐ [Star](https://github.com/Shaojie66/spektralab-ai/stargazers)，
+如果它对你有用，点个 ⭐ [Star](https://github.com/Shaojie66/spektralab-ai)，
 方便以后回来，也让有同样需求的人更容易找到它。
 
-[![Stars](https://img.shields.io/github/stars/Shaojie66/spektralab-ai?style=flat)](https://github.com/Shaojie66/spektralab-ai/stargazers)
+[![Stars](https://img.shields.io/github/stars/Shaojie66/spektralab-ai?style=flat)](https://github.com/Shaojie66/spektralab-ai)
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue?style=flat)](license/LICENSE)
 ![Platform](https://img.shields.io/badge/macOS-15%2B%20%C2%B7%20Apple%20silicon-black?style=flat)
 [![Based on](https://img.shields.io/badge/based%20on-SpektraLab-orange?style=flat)](https://github.com/JamesQiu2005/SpektraLab)
@@ -137,6 +137,6 @@ AI 功能的问题和想法请提到 [Issues](https://github.com/Shaojie66/spekt
 
 ---
 
-⭐ [Star](https://github.com/Shaojie66/spektralab-ai/stargazers) 一下方便回来 ·
+⭐ [Star](https://github.com/Shaojie66/spektralab-ai) 一下方便回来 ·
 遇到问题或有想法，[提 Issue](https://github.com/Shaojie66/spektralab-ai/issues) ·
 也欢迎 [Pull Request](https://github.com/Shaojie66/spektralab-ai/pulls)。

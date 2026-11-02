@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=a92ed78; updated=2026-11-02 -->
+<!-- README_SYNC: source=1c8777a; updated=2026-11-02 -->
 **English** · [简体中文](README.zh-CN.md)
 
 # spektralab-ai
@@ -7,10 +7,10 @@ An unofficial fork of [SpektraLab™](https://github.com/JamesQiu2005/SpektraLab
 the macOS film and print simulator, with AI that picks a film, suggests crops,
 refines the print and smooths skin — on your Mac with Ollama, or with Claude.
 
-If it is useful to you, a ⭐ [Star](https://github.com/Shaojie66/spektralab-ai/stargazers)
+If it is useful to you, a ⭐ [Star](https://github.com/Shaojie66/spektralab-ai)
 keeps it easy to find again and helps people with the same need discover it.
 
-[![Stars](https://img.shields.io/github/stars/Shaojie66/spektralab-ai?style=flat)](https://github.com/Shaojie66/spektralab-ai/stargazers)
+[![Stars](https://img.shields.io/github/stars/Shaojie66/spektralab-ai?style=flat)](https://github.com/Shaojie66/spektralab-ai)
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue?style=flat)](license/LICENSE)
 ![Platform](https://img.shields.io/badge/macOS-15%2B%20%C2%B7%20Apple%20silicon-black?style=flat)
 [![Based on](https://img.shields.io/badge/based%20on-SpektraLab-orange?style=flat)](https://github.com/JamesQiu2005/SpektraLab)
@@ -160,7 +160,7 @@ This repository is a personal fork, publishes no builds, and is not official.
 
 ---
 
-⭐ [Star](https://github.com/Shaojie66/spektralab-ai/stargazers) if it helps ·
+⭐ [Star](https://github.com/Shaojie66/spektralab-ai) if it helps ·
 [Open an issue](https://github.com/Shaojie66/spektralab-ai/issues) for a bug or
 an idea · [pull requests](https://github.com/Shaojie66/spektralab-ai/pulls)
 welcome.
