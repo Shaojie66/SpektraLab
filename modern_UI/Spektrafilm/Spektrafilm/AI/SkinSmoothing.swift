@@ -18,9 +18,19 @@ import CoreImage
 import Foundation
 
 enum SkinSmoothing {
-    /// The band's edges as shares of **each** face's own width.
+    /// The band's edges as shares of **each** face's own width. The upper
+    /// edge widens with the strength, from `coarse` to `coarse × (1 +
+    /// coarseReach)` at 1, so a strong setting takes out more of the blotches:
+    /// a blotch a sixth of a face wide goes from about 70 % removed to about
+    /// 93 %. Not further: a Gaussian reaches well past its σ, and at 8 % the
+    /// face's own shape at half its width (the cheeks' light) lost ~40 %; at
+    /// 6 % it keeps ~74 % (`SkinTests.testEachFaceIsSmoothedAtItsOwnScale`).
     static let fine = 0.004
     static let coarse = 0.04
+    static let coarseReach = 0.5
+    /// Soft skin: how much of the texture finer than σ₁ is softened, at full
+    /// strength, on top of the band.
+    static let softness = 0.6
     /// The edge guard: `CIEdges` answers on the one or two pixels of an edge,
     /// and weakly — about 0.04 for a 0.15 step in linear light. Below
     /// `edgeFloor` (pores, fine texture) nothing is held off; above it the
@@ -40,7 +50,7 @@ enum SkinSmoothing {
     /// the median face, and in a group the small faces at the back were
     /// smoothed at the front faces' scale — their shape taken for blotches,
     /// their glasses' frames softened.
-    static func apply(_ linear: CIImage, mask: SkinMask, strength: Double) -> CIImage {
+    static func apply(_ linear: CIImage, mask: SkinMask, strength: Double, soft: Bool = false) -> CIImage {
         let s = min(1, max(0, strength))
         let extent = linear.extent
         guard s > 0, !mask.isEmpty, !extent.isInfinite, extent.width > 0 else { return linear }
@@ -56,7 +66,7 @@ enum SkinSmoothing {
             guard let m = one.ciImage(over: extent) else { continue }
             let faceWidth = Double(face.box.width * extent.width)
             let sigma1 = max(0.6, faceWidth * fine)
-            let sigma2 = max(sigma1 * 3, faceWidth * coarse)
+            let sigma2 = max(sigma1 * 3, faceWidth * coarse * (1 + coarseReach * s))
             // Only around this face: the blurs are as wide as the face needs.
             let box = CGRect(x: extent.minX + face.box.minX * extent.width,
                              y: extent.minY + face.box.minY * extent.height,
@@ -66,7 +76,12 @@ enum SkinSmoothing {
             guard !region.isEmpty else { continue }
             let b1 = base.applyingGaussianBlur(sigma: sigma1).cropped(to: region)
             let b2 = base.applyingGaussianBlur(sigma: sigma2).cropped(to: region)
-            let band = add(b2, multiply(b1, constant(-1, over: region)))             // b2 − b1
+            var band = add(b2, multiply(b1, constant(-1, over: region)))             // b2 − b1
+            if soft {
+                // + softness × (b1 − img): the fine texture, softened too.
+                let fine = add(b1, multiply(base.cropped(to: region), constant(-1, over: region)))
+                band = add(band, multiply(fine, constant(softness, over: region)))
+            }
             let w = multiply(multiply(m.cropped(to: region), keep.cropped(to: region)),
                              constant(s, over: region))                               // strength × mask × guard
             out = add(out, multiply(band, w))

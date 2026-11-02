@@ -2409,7 +2409,7 @@ final class Session: CanvasHost {
                 let skin = retouch.isActive && pair == nil ? await skinMask(for: d, url: url) : .none
                 guard selection == url, !Task.isCancelled else { return nil }
                 let frame = try await Task.detached(priority: .userInitiated) {
-                    let source = SkinSmoothing.apply(d.linear, mask: skin, strength: retouch.skinSmoothing)
+                    let source = SkinSmoothing.apply(d.linear, mask: skin, strength: retouch.skinSmoothing, soft: retouch.soft)
                     var image = Session.engineImage(source, size: d.pixelSize, cut: cut)
                     if let stops, let layout { image = PairComposer.exposed(image, layout: layout, stops: stops) }
                     return try ImageDecoder.engineFrame(from: image, device: device)

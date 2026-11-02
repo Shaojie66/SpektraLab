@@ -890,6 +890,9 @@ struct FilmParams: Codable, Equatable, Sendable {
 struct RetouchSettings: Codable, Equatable, Sendable {
     /// 0 is off, 1 is the most the band-stop removes (`SkinSmoothing`).
     var skinSmoothing: Double = 0
+    /// Soft skin: the finer texture is softened too, not only the blotches.
+    /// The film's grain still lands on it afterwards.
+    var soft = false
 
     static let skinRange: ClosedRange<Double> = 0...1
 
@@ -899,13 +902,15 @@ struct RetouchSettings: Codable, Equatable, Sendable {
     /// print stamp: nil when nothing is retouched, so every frame without it
     /// keys and stamps exactly as before.
     var key: String? {
-        isActive ? String(format: "skin=%.3f", skinSmoothing) : nil
+        guard isActive else { return nil }
+        return String(format: "skin=%.3f", skinSmoothing) + (soft ? ";soft" : "")
     }
 
-    init(skinSmoothing: Double = 0) { self.skinSmoothing = skinSmoothing }
+    init(skinSmoothing: Double = 0, soft: Bool = false) { self.skinSmoothing = skinSmoothing; self.soft = soft }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         skinSmoothing = try c.decodeIfPresent(Double.self, forKey: .skinSmoothing) ?? 0
+        soft = try c.decodeIfPresent(Bool.self, forKey: .soft) ?? false
     }
-    private enum CodingKeys: String, CodingKey { case skinSmoothing }
+    private enum CodingKeys: String, CodingKey { case skinSmoothing, soft }
 }

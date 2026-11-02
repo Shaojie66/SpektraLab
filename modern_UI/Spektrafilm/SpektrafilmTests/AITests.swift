@@ -472,6 +472,32 @@ final class SkinTests: XCTestCase {
         XCTAssertGreaterThan(contrast(out), contrast(before) * 0.8, "the frame stays as sharp")
     }
 
+    /// Full strength takes out nearly all of a blotch on a large face; a
+    /// middling one, about what it always did.
+    func testFullStrengthTakesNearlyAllOfTheBlotch() {
+        let input = Self.frame()
+        let before = Self.blotch(Self.pixels(input), rows: 200..<312, xs: 40..<200)
+        let full = Self.blotch(Self.pixels(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 1)), rows: 200..<312, xs: 40..<200)
+        XCTAssertLessThan(full, before * 0.12, "nearly all of it at 100 (\(full))")
+    }
+
+    /// Soft skin softens the fine texture as well; without it the texture stays.
+    func testSoftSkinSoftensTheFineTextureToo() {
+        let input = Self.frame()
+        let before = Self.amplitudes(Self.pixels(input), x0: 40, x1: 200)
+        let plain = Self.amplitudes(Self.pixels(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 1)), x0: 40, x1: 200)
+        let soft = Self.amplitudes(Self.pixels(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 1, soft: true)), x0: 40, x1: 200)
+        XCTAssertGreaterThan(plain.checker, before.checker * 0.8, "without it, the texture stays")
+        XCTAssertLessThan(soft.checker, before.checker * 0.55, "with it, the texture is softened (\(soft.checker))")
+        XCTAssertLessThan(soft.blotch, before.blotch * 0.12, "and the blotch still goes")
+        XCTAssertEqual(soft.mean, before.mean, accuracy: 0.005, "the tone is kept")
+        var p = FilmParams()
+        p.retouch = RetouchSettings(skinSmoothing: 0.5)
+        let plainKey = p.engineFramingKey
+        p.retouch.soft = true
+        XCTAssertNotEqual(p.engineFramingKey, plainKey, "soft skin is another frame for the engine")
+    }
+
     func testNothingIsDoneAtZeroOrWithoutAFace() {
         let input = Self.frame()
         XCTAssertTrue(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 0) === input)
@@ -1203,10 +1229,12 @@ final class SkinPhotoTests: XCTestCase {
         let edge = min(4096, Int(s.sourceLongEdge))
         _ = try await ws.preview(to: out.appending(path: "skin-0.jpg"), longEdge: edge)
         let strength = Double(env["SPK_SKIN_STRENGTH"] ?? "0.6") ?? 0.6
-        _ = try await ws.edit(["params": ["retouch": ["skinSmoothing": .number(strength)]]])
+        let soft = env["SPK_SKIN_SOFT"] != nil
+        _ = try await ws.edit(["params": ["retouch": ["skinSmoothing": .number(strength), "soft": .bool(soft)]]])
         try await ws.settle()
         XCTAssertNotNil(s.engineFraming)
-        _ = try await ws.preview(to: out.appending(path: "skin-\(Int(strength * 100)).jpg"), longEdge: edge)
+        _ = try await ws.preview(to: out.appending(path: "skin-\(Int((strength * 100).rounded()))\(soft ? "-soft" : "").jpg"),
+                                 longEdge: edge)
         print("SKIN wrote", out.path)
     }
 }

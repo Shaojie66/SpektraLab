@@ -597,7 +597,13 @@ through controls a person already has:
   `CIEdges` above a floor (0.015, so pores and fine texture are left alone)
   takes the weight to 0 within 1/80, spread 2 px by a minimum filter, which
   keeps a glasses frame's contrast (92 % on a drawn one, against 51 %
-  before the floor and the spread). Core Image's component
+  before the floor and the spread). The band's upper edge widens with the
+  strength, from 4 % to 6 % of the face (a blotch a sixth of the face wide:
+  ~70 % → ~93 % removed at full strength); not to 8 %, where the face's own
+  shape at half its width lost ~40 %. **Soft skin**
+  (`RetouchSettings.soft`, in the framing key) adds 0.6 × the texture finer
+  than σ₁ — the pores the band keeps — for a cleaner look; the grain still
+  lands on it. Core Image's component
   kernels only; every operand is opaque because Core Image stores colour
   premultiplied (a constant with alpha 0 multiplies to nothing), and the
   summed alpha is set back to 1. `SkinTests` measures it on known pixels

@@ -182,7 +182,7 @@ enum ProofSheet {
         let retouch = session.params.retouch
         let skin = retouch.isActive ? await session.skinMask(for: decoded, url: session.selection!) : .none
         let frame = try await Task.detached(priority: .userInitiated) {
-            let source = SkinSmoothing.apply(decoded.linear, mask: skin, strength: retouch.skinSmoothing)
+            let source = SkinSmoothing.apply(decoded.linear, mask: skin, strength: retouch.skinSmoothing, soft: retouch.soft)
             var image = Session.engineImage(source, size: decoded.pixelSize,
                                             cut: geometry.isIdentity ? nil : geometry)
             let long = max(image.extent.width, image.extent.height)

@@ -22,7 +22,7 @@ enum AIPrompts {
         "params.exposureCompensationEV", "params.printBrightnessStops",
         "params.yFilterShift", "params.mFilterShift", "params.preflashExposure",
         "params.grainActive", "params.halationActive", "params.effects.grain", "params.effects.halation",
-        "params.retouch.skinSmoothing",
+        "params.retouch.skinSmoothing", "params.retouch.soft",
         "adjustments",
     ]
 
@@ -245,8 +245,9 @@ enum AIPrompts {
         Skin smoothing (params.retouch.skinSmoothing, 0 to 1) evens out skin on the faces that were found, \
         before the film, so the grain stays. Use it only when faces were found and the person wants a \
         portrait cleaned up or the skin is clearly blotchy: about 0.2–0.4 for a natural portrait, rarely \
-        above 0.6, and leave it at 0 for a scene where people are small or incidental. Skin that looks waxy \
-        or flat has been smoothed too far. Changing it re-develops the frame, so set it once rather than \
+        above 0.6, and leave it at 0 for a scene where people are small or incidental. params.retouch.soft \
+        softens the finer texture as well — only when the person asks for clean, soft or beauty-style skin. \
+        Skin that looks waxy or flat has been smoothed too far. Changing it re-develops the frame, so set it once rather than \
         nudging it every round.
 
         Look at the print. Make small, deliberate moves — a filter shift of 0.02 to 0.08, a few points on a \

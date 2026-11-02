@@ -134,6 +134,8 @@ enum AgentSchema {
             .init("params.effects.glare", .number(EffectStrengths.glareRange), "Glare strength, × the paper's own."),
             .init("params.retouch.skinSmoothing", .number(RetouchSettings.skinRange),
                   "Skin smoothing, 0 off to 1 most, on the faces Vision finds, done before the film so the grain stays on the skin. Re-develops the frame."),
+            .init("params.retouch.soft", .bool,
+                  "Soft skin: with skin smoothing on, soften the finer texture too, not only the blotches. Re-develops the frame."),
         ]
         // RFC-032's film edge and RFC-031's date back (API-SPEC §13). Shoot
         // layer: every edit re-develops. What the session resolves for the

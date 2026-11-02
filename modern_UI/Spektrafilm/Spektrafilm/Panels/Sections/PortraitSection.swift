@@ -26,13 +26,23 @@ struct PortraitSection: View {
                             range: 0...100, zero: 0, snap: 5,
                             format: { String(format: "%.0f", $0) },
                             onCommit: { if let d = draft { set(d / 100) }; draft = nil })
-                    .rowEnabled(session.pair == nil && (faces ?? 0) > 0,
-                                because: session.pair != nil
-                                    ? L("Not available on a half-frame pair yet.", zh: "暂不支持半格拼接。")
-                                    : L("No face was found in this frame.", zh: "这张照片里没有检测到人脸。"))
+                    .rowEnabled(usable, because: reason)
+                ToggleRow(label: L("Soft skin", zh: "柔肤"),
+                          isOn: Binding(get: { session.params.retouch.soft },
+                                        set: { on in var p = session.params; p.retouch.soft = on; session.params = p }),
+                          enabled: usable && session.params.retouch.isActive,
+                          reason: usable ? L("Turn skin smoothing up first.", zh: "先调高磨皮强度。") : reason,
+                          sublabel: L("Softens the finer texture too; the film's grain still lands on it.",
+                                     zh: "连更细的肤质纹理一起柔化；胶片颗粒仍会覆盖在上面。"))
             }
         }
         .task(id: session.selection) { await session.refreshSkinMask() }
+    }
+
+    private var usable: Bool { session.pair == nil && (faces ?? 0) > 0 }
+    private var reason: String {
+        session.pair != nil ? L("Not available on a half-frame pair yet.", zh: "暂不支持半格拼接。")
+                            : L("No face was found in this frame.", zh: "这张照片里没有检测到人脸。")
     }
 
     private var sublabel: String {
