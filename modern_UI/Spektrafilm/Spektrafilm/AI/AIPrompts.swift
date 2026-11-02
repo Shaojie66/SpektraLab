@@ -284,11 +284,22 @@ enum AIPrompts {
     @MainActor
     static func refinerUser(document: JSONValue, latitude: JSONValue?, film: String?, exif: EXIFReadout?,
                             intent: String, history: [AIAssistant.Step], feedback: String?,
-                            round: Int, of total: Int, faces: Int? = nil) -> String {
+                            round: Int, of total: Int, faces: SkinMask? = nil) -> String {
         var lines = ["The print above, round \(round) of \(total). Film: \(film ?? "?")."]
         if let faces {
-            lines.append(faces == 0 ? "No faces were found: leave skin smoothing at 0."
-                                    : "\(faces) face(s) found, so skin smoothing applies to them.")
+            if faces.isEmpty {
+                lines.append("No faces were found: leave skin smoothing at 0.")
+            } else {
+                var line = "\(faces.faces.count) face(s) found, so skin smoothing applies to them."
+                if faces.missed > 0 {
+                    line += " \(faces.missed) more were too small or turned to smooth, so it would treat people unevenly."
+                }
+                if faces.facesAreSmall {
+                    line += String(format: " All are small (the largest is %.0f%% of the long edge): it barely shows; leave it at 0 unless asked.",
+                                   faces.largestFace * 100)
+                }
+                lines.append(line)
+            }
         }
         lines.append("Fields you may write (path, type and range, meaning):")
         for field in AgentSchema.fields where field.readOnly == nil && isRefinable(field.path) {

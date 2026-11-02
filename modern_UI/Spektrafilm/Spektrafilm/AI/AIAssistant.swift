@@ -322,7 +322,7 @@ final class AIAssistant {
                 try await ws.process()
             }
             var feedback: String?
-            let faces = await session.refreshSkinMask()?.faces.count
+            let faces = await session.refreshSkinMask()
             for round in 1...Self.maxRounds {
                 try Task.checkCancellation()
                 guard session.selection == url else { return }

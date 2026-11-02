@@ -45,10 +45,32 @@ struct PortraitSection: View {
     }
 
     private var sublabel: String {
-        guard let n = faces else { return L("Looking for faces…", zh: "正在检测人脸……") }
-        if n == 0 { return L("No face found", zh: "没有检测到人脸") }
-        return L(n == 1 ? "1 face · before the film" : "\(n) faces · before the film",
-                 zh: "检测到 \(n) 张人脸 · 在胶片之前处理")
+        guard let mask = session.skinFaces else { return L("Looking for faces…", zh: "正在检测人脸……") }
+        return Self.note(mask)
+    }
+
+    /// The faces line: how many, how many are left alone and why, and when
+    /// they are all too small for the smoothing to show.
+    static func note(_ mask: SkinMask) -> String {
+        let n = mask.faces.count
+        if n == 0 {
+            return mask.missed > 0
+                ? L("\(mask.missed) face(s) too small or turned to smooth", zh: "有 \(mask.missed) 张脸太小或太偏，无法磨皮")
+                : L("No face found", zh: "没有检测到人脸")
+        }
+        var en = n == 1 ? "1 face" : "\(n) faces", zh = "检测到 \(n) 张人脸"
+        if mask.missed > 0 {
+            en += " · \(mask.missed) more too small or turned, left as they are"
+            zh += " · 另有 \(mask.missed) 张太小或太偏，不处理"
+        }
+        if mask.facesAreSmall {
+            en += " · all small, so it barely shows"
+            zh += " · 人脸都很小，磨皮效果有限"
+        } else if mask.missed == 0 {
+            en += " · before the film"
+            zh += " · 在胶片之前处理"
+        }
+        return L(en, zh: zh)
     }
 
     /// Says when the grain holds soft skin back (`RetouchSettings.softShare`).

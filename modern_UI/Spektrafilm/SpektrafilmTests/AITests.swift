@@ -230,12 +230,41 @@ final class AIUnitTests: XCTestCase {
         XCTAssertNoThrow(try AIPrompts.checkScope(["params": ["retouch": ["skinSmoothing": 0.3]]]))
         XCTAssertThrowsError(try AIPrompts.checkScope(["params": ["retouch": ["skinSmoothing": 1.5]]]), "the range holds")
         XCTAssertTrue(AIPrompts.refinerSystem.contains("params.retouch.skinSmoothing"))
-        let none = AIPrompts.refinerUser(document: ["params": [:], "adjustments": [:]], latitude: nil, film: nil, exif: nil,
-                                         intent: "", history: [], feedback: nil, round: 1, of: 3, faces: 0)
-        XCTAssertTrue(none.contains("No faces were found"))
-        let two = AIPrompts.refinerUser(document: ["params": [:], "adjustments": [:]], latitude: nil, film: nil, exif: nil,
-                                        intent: "", history: [], feedback: nil, round: 1, of: 3, faces: 2)
+        func told(_ mask: SkinMask) -> String {
+            AIPrompts.refinerUser(document: ["params": [:], "adjustments": [:]], latitude: nil, film: nil, exif: nil,
+                                  intent: "", history: [], feedback: nil, round: 1, of: 3, faces: mask)
+        }
+        XCTAssertTrue(told(.none).contains("No faces were found"))
+        let big = SkinTests.face(0.2, 0.3, 0.2, 0.25)
+        let two = told(SkinMask(faces: [big, big]))
         XCTAssertTrue(two.contains("2 face(s) found"))
+        XCTAssertFalse(two.contains("unevenly"))
+        XCTAssertFalse(two.contains("barely shows"))
+        let crowd = told(SkinMask(faces: [SkinTests.face(0.2, 0.3, 0.03, 0.04)], missed: 4, aspect: 4.0 / 3))
+        XCTAssertTrue(crowd.contains("4 more were too small or turned"), crowd)
+        XCTAssertTrue(crowd.contains("All are small (the largest is 3% of the long edge)"), crowd)
+    }
+
+    /// The Portrait section says who is left alone, and when every face is
+    /// too small for the smoothing to show.
+    func testThePortraitNoteSaysWhoIsLeftAloneAndWhenFacesAreSmall() {
+        let big = SkinTests.face(0.2, 0.3, 0.2, 0.25), small = SkinTests.face(0.2, 0.3, 0.03, 0.04)
+        XCTAssertEqual(SkinMask(faces: [big]).largestFace, 0.2, accuracy: 1e-9)
+        XCTAssertEqual(SkinMask(faces: [big], aspect: 0.75).largestFace, 0.15, accuracy: 1e-9,
+                       "a portrait-format picture: a share of its long edge, the height")
+        XCTAssertFalse(SkinMask(faces: [big, small]).facesAreSmall, "one large face is enough")
+        XCTAssertTrue(SkinMask(faces: [small, small]).facesAreSmall)
+        XCTAssertFalse(SkinMask.none.facesAreSmall)
+
+        let plain = PortraitSection.note(SkinMask(faces: [big, big]))
+        let group = PortraitSection.note(SkinMask(faces: [small, small], missed: 3))
+        let lost = PortraitSection.note(SkinMask(faces: [], missed: 2))
+        XCTAssertTrue(plain.contains("2"))
+        XCTAssertFalse(plain.contains("3"))
+        XCTAssertTrue(group.contains("2") && group.contains("3"), group)
+        XCTAssertNotEqual(group, PortraitSection.note(SkinMask(faces: [big, small], missed: 3)), "small faces say so")
+        XCTAssertTrue(lost.contains("2"), lost)
+        XCTAssertNotEqual(lost, PortraitSection.note(.none))
     }
 
     func testAMeterIsReadStrictlyAndRefiningMayChangeIt() throws {
@@ -1333,6 +1362,7 @@ final class SkinPhotoTests: XCTestCase {
         let found = await s.refreshSkinMask()
         let mask = try XCTUnwrap(found)
         print("SKIN faces:", mask.faces.count, "median width:", mask.faceWidth)
+        print("SKIN missed:", mask.missed, "largest:", mask.largestFace, "note:", PortraitSection.note(mask))
         XCTAssertFalse(mask.isEmpty, "a portrait has a face Vision finds")
         if let d = s.decoded, let m = mask.render(width: Int(d.pixelSize.width / 4), height: Int(d.pixelSize.height / 4)) {
             try? ProofSheet.writeJPEG(m, to: out.appending(path: "skin-mask.jpg"))

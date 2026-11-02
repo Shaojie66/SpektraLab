@@ -24,9 +24,27 @@ struct SkinMask: Sendable {
     }
 
     let faces: [Face]
+    /// Faces whose box was found but whose landmarks were not — too small or
+    /// turned too far: people the smoothing leaves as they are.
+    var missed = 0
+    /// The searched picture's width over its height.
+    var aspect = 1.0
     static let none = SkinMask(faces: [])
 
     var isEmpty: Bool { faces.isEmpty }
+
+    /// The largest face's width as a share of the picture's long edge.
+    var largestFace: Double {
+        (faces.map { Double($0.box.width) }.max() ?? 0) * min(1, aspect)
+    }
+
+    /// Below this, even the largest face is small in the picture: on a group
+    /// of about 25 at 1440 px the largest face was 3.5 % of the long edge and
+    /// the smoothing showed only at 2× and up; a portrait of four, 17 %.
+    static let smallFace = 0.05
+
+    /// Every face found is small (`smallFace`): smoothing barely shows.
+    var facesAreSmall: Bool { !isEmpty && largestFace < Self.smallFace }
 
     /// The median face width, as a fraction of the frame's width: what the
     /// smoothing's scales are set from.
@@ -55,8 +73,10 @@ struct SkinMask: Sendable {
             try VNImageRequestHandler(cgImage: crop, options: [:]).perform([request])
             boxes += (request.results ?? []).map { pixelRect($0.boundingBox, in: tile, of: size) }
         }
-        let faces = merged(boxes).compactMap { face(in: image, at: $0) }
-        return SkinMask(faces: faces)
+        let found = merged(boxes)
+        let faces = found.compactMap { face(in: image, at: $0) }
+        return SkinMask(faces: faces, missed: found.count - faces.count,
+                        aspect: Double(size.width / max(size.height, 1)))
     }
 
     /// The whole picture, then `n`×`n` tiles overlapping by `overlap` of a

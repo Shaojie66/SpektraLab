@@ -632,7 +632,12 @@ through controls a person already has:
   half a seam cut), then landmarks on each box's crop at twice its size
   enlarged to 256 px, found 19 through the app's path (8 against 6 on a
   group of 10, 4 against 4 on a portrait of four). Enlarging the whole
-  picture found none more. The skin mask is cached per frame and decode
+  picture found none more. A box whose landmarks are not found is counted
+  (`SkinMask.missed`), and the Portrait section says so — those people are
+  left as they are — as it says when even the largest face is under 5 % of
+  the long edge (`facesAreSmall`: 3.4 % on that group, where the smoothing
+  showed only at 2×). The refiner is told both, so it need not judge a
+  face's size by eye. The skin mask is cached per frame and decode
   (`Session.skinMaskState`); faces and strength are the photograph's own,
   so the Settings clipboard does not copy it. Not on a pair.
 - **Settling is on the wire.** A crop re-resolves `dateBack.framing`,

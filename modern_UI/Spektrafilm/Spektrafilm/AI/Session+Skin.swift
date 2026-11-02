@@ -46,8 +46,11 @@ extension Session {
     }
 
     /// The faces found in the open frame, or nil when not looked for yet.
-    var skinFaceCount: Int? {
+    var skinFaceCount: Int? { skinFaces?.faces.count }
+
+    /// What was found in the open frame, or nil when not looked for yet.
+    var skinFaces: SkinMask? {
         guard let s = skinMaskState, s.url == selection else { return nil }
-        return s.mask.faces.count
+        return s.mask
     }
 }
