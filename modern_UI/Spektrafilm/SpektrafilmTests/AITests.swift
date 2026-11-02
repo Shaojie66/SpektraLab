@@ -635,6 +635,42 @@ final class SkinTests: XCTestCase {
         XCTAssertTrue(kept.contains(neighbour))
     }
 
+    /// Skin beside a dark feature keeps its tone. The band's averages were
+    /// taken over everything, so a lip or a nostril cut out of the mask was
+    /// still averaged into the skin beside it, and pulled it dark (a nose's
+    /// highlight, light): at full strength on a close selfie a quarter of
+    /// the face moved by more than 6 levels. The averages are over the skin.
+    func testSkinBesideADarkFeatureKeepsItsTone() {
+        let n = Self.side
+        // Flat skin with a dark lip across the middle, and the lip cut out.
+        let lip = CGRect(x: 150, y: 244, width: 210, height: 24)
+        var px = [Float](repeating: 0, count: n * n * 4)
+        for y in 0..<n {
+            for x in 0..<n {
+                let v: Float = lip.contains(CGPoint(x: x, y: y)) ? 0.03 : 0.4
+                let i = (y * n + x) * 4
+                px[i] = v; px[i + 1] = v; px[i + 2] = v; px[i + 3] = 1
+            }
+        }
+        let input = CIImage(bitmapData: px.withUnsafeBufferPointer { Data(buffer: $0) }, bytesPerRow: n * 16,
+                            size: CGSize(width: n, height: n), format: .RGBAf, colorSpace: Self.space)
+        let d = Double(n)
+        let hole = [CGPoint(x: lip.minX / d, y: lip.minY / d), CGPoint(x: lip.maxX / d, y: lip.minY / d),
+                    CGPoint(x: lip.maxX / d, y: lip.maxY / d), CGPoint(x: lip.minX / d, y: lip.maxY / d)]
+        let mask = SkinMask(faces: [SkinMask.Face(
+            box: CGRect(x: 0, y: 0, width: 1, height: 1),
+            outline: [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)],
+            features: [hole])])
+        let out = Self.pixels(SkinSmoothing.apply(input, mask: mask, strength: 1, soft: 1))
+        // Skin 20–40 px above and below the lip (symmetric: the bitmap may be
+        // flipped), well inside the band's reach (σ₂ ≈ 30 px).
+        var worst = 0.0
+        for y in Array(204...224) + Array(288...308) {
+            for x in 200..<310 { worst = max(worst, abs(Double(out[(y * n + x) * 4]) - 0.4)) }
+        }
+        XCTAssertLessThan(worst, 0.01, "skin beside the lip moved by \(worst) of 0.4")
+    }
+
     func testNothingIsDoneAtZeroOrWithoutAFace() {
         let input = Self.frame()
         XCTAssertTrue(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 0) === input)

@@ -7,6 +7,10 @@
 //
 //      out = img + w · (blur(σ₂) − blur(σ₁)),   w = strength × mask
 //
+//  where each blur is an average **over the skin alone** — weighted by the
+//  mask and the edge guard, so a lip, a nostril, an eye or a glasses frame is
+//  not averaged into the skin beside it (`weightedBlur`).
+//
 //  σ₁ ≈ 0.4 % and σ₂ ≈ 4 % of **each** face's own width, so the same strength
 //  means the same thing on a head-and-shoulders and on a face at the back of
 //  a group; and the weight falls away at sharp edges (glasses frames, hair). It runs on the linear
@@ -76,8 +80,11 @@ enum SkinSmoothing {
             let region = box.insetBy(dx: -box.width * 0.4 - sigma2 * 3, dy: -box.height * 0.4 - sigma2 * 3)
                 .intersection(extent)
             guard !region.isEmpty else { continue }
-            let b1 = base.applyingGaussianBlur(sigma: sigma1).cropped(to: region)
-            let b2 = base.applyingGaussianBlur(sigma: sigma2).cropped(to: region)
+            // The averages are over this face's skin: what the mask cuts out
+            // and the guard holds off is not averaged in.
+            let weight = multiply(m, keep).clampedToExtent()
+            let b1 = weightedBlur(base, weight: weight, sigma: sigma1, region: region)
+            let b2 = weightedBlur(base, weight: weight, sigma: sigma2, region: region)
             var band = add(b2, multiply(b1, constant(-1, over: region)))             // b2 − b1
             if soft > 0 {
                 // + softness × share × (b1 − img): the fine texture, softened too.
@@ -112,6 +119,34 @@ enum SkinSmoothing {
         ])
         .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: edgeReach])
         .cropped(to: extent)
+    }
+
+    /// `blur(img · w) / blur(w)`: the Gaussian average of the picture over the
+    /// weight alone (normalised convolution). A plain blur took a lip or a
+    /// nostril into the skin beside it: on a close selfie at full strength a
+    /// quarter of the face moved by more than 6 levels, dark under the nose
+    /// and the lip, light round the nose, and jagged along a glasses frame.
+    static func weightedBlur(_ image: CIImage, weight: CIImage, sigma: Double, region: CGRect) -> CIImage {
+        let num = multiply(image, weight).applyingGaussianBlur(sigma: sigma).cropped(to: region)
+        let den = weight.applyingGaussianBlur(sigma: sigma).cropped(to: region)
+        return multiply(num, reciprocal(den, over: region))
+    }
+
+    /// Where less than this share of a blur's reach is skin, the average is
+    /// not trusted: the weight there is nearly 0 as well.
+    static let weightFloor = 0.02
+
+    /// `1 / max(d, weightFloor)` by Newton's step `r ← r(2 − d·r)` from 1,
+    /// which for d in [0.02, 1] is within 1e-8 after ten. Not Core Image's
+    /// divide: measured 2026-11-02, on the GPU it returned the quotient
+    /// less the divisor (0.0203 / 1 → −0.98), and it clamps to 0…1.
+    static func reciprocal(_ d: CIImage, over region: CGRect) -> CIImage {
+        let floored = CIBlendKernel.componentMax.apply(foreground: constant(weightFloor, over: region), background: d) ?? d
+        var r = constant(1, over: region)
+        for _ in 0..<10 {
+            r = multiply(r, add(constant(2, over: region), multiply(multiply(floored, r), constant(-1, over: region))))
+        }
+        return r
     }
 
     // MARK: component arithmetic

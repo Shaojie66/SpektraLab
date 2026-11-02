@@ -590,7 +590,17 @@ through controls a person already has:
   `requestPrint` release the engine's frame and re-develop from a retouched
   decode — the film edge's own mechanism for "the engine holds another
   picture" — and joins `printStamp`, so neither cache can hand back the
-  unsmoothed print. The band-stop is `img + w·(blur(σ₂) − blur(σ₁))` with
+  unsmoothed print. The band-stop is `img + w·(blur(σ₂) − blur(σ₁))`, each
+  blur an average **over the skin alone** (`SkinSmoothing.weightedBlur`,
+  `blur(img·a)/blur(a)` with `a` the mask times the edge guard), so a lip, a
+  nostril or a frame cut out is not averaged into the skin beside it — a
+  plain blur moved skin beside a drawn dark lip by 0.066 of 0.4, and on a
+  close selfie at full strength darkened skin overall by 4.5 levels (2.4
+  after). The reciprocal is Newton's (`reciprocal`): Core Image's divide, on
+  the GPU, returned the quotient less the divisor, and clamps to 0…1. What
+  remains at full strength is the band's own flattening of the shading
+  beside the nose and lip, and jagged edges along a glasses frame from the
+  guard's hard edge. With
   σ₁ ≈ 0.4 % and σ₂ ≈ 4 % of **each face's own** width, computed only around
   that face: pores and the face's own light are kept, the blotches between
   go. (The first version used the median face, and in a group the small
