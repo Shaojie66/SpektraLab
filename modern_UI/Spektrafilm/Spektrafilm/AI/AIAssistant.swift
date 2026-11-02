@@ -104,7 +104,11 @@ final class AIAssistant {
         self.session = session
     }
 
-    var busy: Bool { phase != .idle }
+    /// From the moment a run is started, not from when its first phase is
+    /// set: work done before that (finding the faces, a Process) left a
+    /// window where the run looked finished — a second press could start
+    /// another, and Undo AI changes was refused under a run still going.
+    var busy: Bool { phase != .idle || task != nil }
     var canUndo: Bool {
         guard let before, before.url == session.selection else { return false }
         return before.sidecar != session.sidecar

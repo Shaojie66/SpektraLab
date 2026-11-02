@@ -905,6 +905,22 @@ final class AISessionTests: XCTestCase {
         XCTAssertNil(s.engineFraming, "Undo re-develops the untouched frame")
     }
 
+    /// A run is busy from the moment it is started: the work before its first
+    /// phase (finding faces, a Process) once left it looking finished, so the
+    /// end-to-end run went on to Undo under a refinement still going.
+    func testARunIsBusyFromTheMomentItStarts() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        let script = Script([["rationale": "", "patch_json": "{}", "placement": .null, "done": true]])
+        let assistant = AIAssistant(session: ws.session)
+        assistant.makeClient = { AIClient(kind: .anthropic, model: "claude-opus-5-5", baseURL: "", apiKey: "k", transport: script) }
+        assistant.refine()
+        XCTAssertTrue(assistant.busy, "busy before its first phase is set")
+        while assistant.busy { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertEqual(script.sent.count, 1, "and it did run")
+    }
+
     /// Restoring an earlier edit is one step, and Undo takes it back.
     func testRestoringAnEditIsOneUndoableStep() async throws {
         let url = try syntheticFrame()
