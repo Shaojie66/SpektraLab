@@ -632,7 +632,14 @@ through controls a person already has:
   half a seam cut), then landmarks on each box's crop at twice its size
   enlarged to 256 px, found 19 through the app's path (8 against 6 on a
   group of 10, 4 against 4 on a portrait of four). Enlarging the whole
-  picture found none more. A box whose landmarks are not found is counted
+  picture found none more. The 2048 px render is made with Lanczos: halved
+  by sampling alone, a selfie through a scratched mirror aliased its
+  scratches into noise and lost its face's box. Landmarks are read after
+  the crop's own search finds the face again, not in the box given: given
+  the box, Vision fits an outline to anything, and the three faces its
+  search refused (that selfie, through the scratches; one at the back of a
+  group; a face on a screen) fitted outlines 0.58–0.66 of the box wide,
+  against 0.79–1.07 for the 32 it took. A box whose landmarks are not found is counted
   (`SkinMask.missed`), and the Portrait section says so — those people are
   left as they are — as it says when even the largest face is under 5 % of
   the long edge (`facesAreSmall`: 3.4 % on that group, where the smoothing

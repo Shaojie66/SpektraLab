@@ -24,8 +24,15 @@ extension Session {
         let mask = await Task.detached(priority: .userInitiated) { () -> SkinMask in
             let long = max(display.extent.width, display.extent.height)
             guard long > 0 else { return .none }
+            // Lanczos, not a bare transform: halving a 4032 px frame by
+            // sampling alone aliases fine lines into noise, and on a selfie
+            // through a scratched mirror that put the face's box under
+            // Vision's threshold.
             let scale = min(1, Session.skinDetectionLongEdge / long)
-            let small = display.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            let small = scale < 1
+                ? display.applyingFilter("CILanczosScaleTransform",
+                                         parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1])
+                : display
             guard let srgb = CGColorSpace(name: CGColorSpace.sRGB),
                   let cg = ImageDecoder.context.createCGImage(small, from: small.extent.integral,
                                                               format: .RGBA8, colorSpace: srgb)
