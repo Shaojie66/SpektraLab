@@ -498,6 +498,27 @@ final class SkinTests: XCTestCase {
         XCTAssertNotEqual(p.engineFramingKey, plainKey, "soft skin is another frame for the engine")
     }
 
+    /// The features stay out of the mask whatever the feather: an eye is
+    /// about a twentieth of a face tall, and the edge's feather (3 % of a
+    /// face's width) blurred over the hole filled it back to half, so a
+    /// strong setting greyed the irises and took the lash line.
+    func testTheEyesStayOutOfTheMask() {
+        let n = Double(Self.side)
+        // A face 40 % of the frame wide; an eye 8 % of it wide, 4 % tall.
+        let eye = CGRect(x: 0.45, y: 0.492, width: 0.032, height: 0.016)   // centred in y: the bitmap may be flipped
+        let mask = SkinMask(faces: [SkinMask.Face(
+            box: CGRect(x: 0.3, y: 0.25, width: 0.4, height: 0.5),
+            outline: [CGPoint(x: 0.3, y: 0.25), CGPoint(x: 0.7, y: 0.25), CGPoint(x: 0.7, y: 0.75), CGPoint(x: 0.3, y: 0.75)],
+            features: [[CGPoint(x: eye.minX, y: eye.minY), CGPoint(x: eye.maxX, y: eye.minY),
+                        CGPoint(x: eye.maxX, y: eye.maxY), CGPoint(x: eye.minX, y: eye.maxY)]])])
+        let image = try! XCTUnwrap(mask.ciImage(over: CGRect(x: 0, y: 0, width: n, height: n)))
+        let px = Self.pixels(image)
+        func at(_ x: Double, _ y: Double) -> Float { px[(Int(y * n) * Self.side + Int(x * n)) * 4] }
+        XCTAssertLessThan(at(eye.midX, eye.midY), 0.1, "the eye is out (\(at(eye.midX, eye.midY)))")
+        XCTAssertGreaterThan(at(0.4, 0.35), 0.95, "the cheek is in")
+        XCTAssertLessThan(at(0.5, 0.2), 0.05, "outside the face is out")
+    }
+
     func testNothingIsDoneAtZeroOrWithoutAFace() {
         let input = Self.frame()
         XCTAssertTrue(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 0) === input)

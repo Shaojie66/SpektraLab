@@ -539,7 +539,7 @@ through controls a person already has:
 | **Choose the exposure** | first, and only while the frame is on the untouched default (balanced, no Exp. Comp.): the current film printed under each of the four meters on one sheet; the model picks the meter the scene wants (protect highlights for night, fireworks, stage, backlight; protect shadows for snow, beach, bright sky), set through `applyAgentEdit` | `AIAssistant.chooseExposure`, `ProofCandidate.meter` |
 | **Choose a film** | the frame is printed small (512 px) on every colour film, each on its declared paper, slides scanned, push processes aside, the current pair first; a vision model sees the numbered contact sheet and each proof's numbers and ranks the best 3–5 with reasons; **Apply** is `selectFilmStock` + `selectPrintStock` + Solve | `AI/ProofSheet`, `AI/ImageMetrics`, `AI/AIAssistant.recommendFilm` |
 | **Compose** | a whole-frame proof (1024 px) is measured on the Mac with Vision — horizon tilt, attention saliency, faces — and 8–12 crops are built by rule (a subject on a third or centred; a scene — a salient region over 35 % of the frame — the largest crop of each ratio, then that crop slid to keep the top or the bottom, the left or the right; at the original, 3:2, 5:4, 1:1 and 16:9 ratios in the picture's own orientation, levelled when the horizon is off by ≥ 0.5°, tile 1 the current framing); rendered on one sheet, the model picks three; **Apply** writes `crop`, `angle` and `aspect` through `applyAgentEdit` | `AI/CompositionAnalysis`, `AI/CompositionCandidates`, `AIAssistant.recommendComposition` |
-| **Skin smoothing** | Pre-Dev ▸ Portrait, 0–100, written on release; also refinable (`params.retouch.skinSmoothing`). Vision face landmarks on a 1024 px render of the decode give a skin mask (face outline raised over the forehead, eyes, brows, lips and nose cut out, edge pulled in and feathered); a band-stop is applied to the **linear decode before the engine** | `AI/SkinMask`, `AI/SkinSmoothing`, `AI/Session+Skin`, `Panels/Sections/PortraitSection` |
+| **Skin smoothing** | Pre-Dev ▸ Portrait, 0–100, written on release; also refinable (`params.retouch.skinSmoothing`). Vision face landmarks on a 1024 px render of the decode give a skin mask (face outline raised over the forehead, edge pulled in and feathered; eyes, brows, lips and nose cut out with a narrower feather of their own); a band-stop is applied to the **linear decode before the engine** | `AI/SkinMask`, `AI/SkinSmoothing`, `AI/Session+Skin`, `Panels/Sections/PortraitSection` |
 | **Refine** | up to three rounds of: the finished print (1024 px, through `Exporter` like an agent preview) + the writable fields + the latitude report → the model answers a JSON merge patch and an optional Scene Placement → `applyAgentEdit` / `placeSceneNow`, refusals reported back | `AIAssistant.refine`, `AI/AIPrompts` |
 
 - **Proofs run on a second `EngineClient`.** `open` replaces a client's one
@@ -605,7 +605,10 @@ through controls a person already has:
   shape at half its width lost ~40 %. **Soft skin**
   (`RetouchSettings.soft`, in the framing key) adds 0.6 × the texture finer
   than σ₁ — the pores the band keeps — for a cleaner look; the grain still
-  lands on it. Core Image's component
+  lands on it. The features are feathered apart from the skin's edge
+  (`SkinMask.featureFeather`, 1 %, cut 2 % past the landmarks): one 3 %
+  feather over everything filled an eye's hole back in and greyed the irises
+  at full strength. Core Image's component
   kernels only; every operand is opaque because Core Image stores colour
   premultiplied (a constant with alpha 0 multiplies to nothing), and the
   summed alpha is set back to 1. `SkinTests` measures it on known pixels
