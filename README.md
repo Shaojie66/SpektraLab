@@ -103,7 +103,7 @@ xcodebuild -project Spektrafilm.xcodeproj -scheme SpektrafilmTests \
 
 ## Layout
 
-| | |
+| Path | What is there |
 |---|---|
 | `modern_UI/Spektrafilm/` | the app: SwiftUI, AppKit, Metal |
 | `modern_UI/Spektrafilm/Spektrafilm/AI/` | this fork's AI: proofs, prompts, crops, face masks, skin smoothing |
@@ -132,7 +132,7 @@ The film process model, its 28 measured colour profiles and the print LUTs are
 4 measured B&W profiles are by Hanze Qiu; SpektraLab is a native C++/Metal
 port of that engine and the application built around it.
 
-| | |
+| Part | Licence |
 |---|---|
 | app and engine | GPL-3.0-or-later |
 | film and paper profiles, print LUTs | CC BY-SA 4.0 |

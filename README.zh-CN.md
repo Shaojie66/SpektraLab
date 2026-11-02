@@ -85,7 +85,7 @@ xcodebuild -project Spektrafilm.xcodeproj -scheme SpektrafilmTests \
 
 ## 目录
 
-| | |
+| 路径 | 内容 |
 |---|---|
 | `modern_UI/Spektrafilm/` | 应用：SwiftUI、AppKit、Metal |
 | `modern_UI/Spektrafilm/Spektrafilm/AI/` | 本 fork 的 AI：小样、提示词、裁切、人脸遮罩、磨皮 |
@@ -106,7 +106,7 @@ AI 功能的问题和想法请提到 [Issues](https://github.com/Shaojie66/spekt
 胶片过程模型、28 款实测彩色配置与放大 LUT 来自 Andrea Volpato 的 [spektrafilm](https://github.com/andreavolpato/spektrafilm)；
 4 款实测黑白配置来自 Hanze Qiu；SpektraLab 是该引擎的原生 C++/Metal 移植，以及围绕它构建的应用。
 
-| | |
+| 部分 | 许可 |
 |---|---|
 | 应用与引擎 | GPL-3.0-or-later |
 | 胶片与相纸配置、放大 LUT | CC BY-SA 4.0 |
