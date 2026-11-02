@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=f2aa1b9; updated=2026-11-02 -->
+<!-- README_SYNC: source=98afcf4; updated=2026-11-02 -->
 **English** · [简体中文](AI.zh-CN.md) · [Back to the README](../README.md)
 
 # The AI features

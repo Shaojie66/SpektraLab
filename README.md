@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=1c8777a; updated=2026-11-02 -->
+<!-- README_SYNC: source=98afcf4; updated=2026-11-02 -->
 **English** · [简体中文](README.zh-CN.md)
 
 # spektralab-ai

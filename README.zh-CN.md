@@ -1,13 +1,11 @@
-<!-- README_SYNC: source=1c8777a; updated=2026-11-02 -->
+<!-- README_SYNC: source=98afcf4; updated=2026-11-02 -->
 [English](README.md) · **简体中文**
 
 # spektralab-ai
 
-[SpektraLab™](https://github.com/JamesQiu2005/SpektraLab)（macOS 胶片与相纸模拟器）的非官方 fork，
-加上了 AI：帮你选胶片、推荐构图、精修成片、给人像磨皮——可以用本机的 Ollama，也可以用 Claude。
+[SpektraLab™](https://github.com/JamesQiu2005/SpektraLab)（macOS 胶片与相纸模拟器）的非官方 fork，加上了 AI：帮你选胶片、推荐构图、精修成片、给人像磨皮——可以用本机的 Ollama，也可以用 Claude。
 
-如果它对你有用，点个 ⭐ [Star](https://github.com/Shaojie66/spektralab-ai)，
-方便以后回来，也让有同样需求的人更容易找到它。
+如果它对你有用，点个 ⭐ [Star](https://github.com/Shaojie66/spektralab-ai)，方便以后回来，也让有同样需求的人更容易找到它。
 
 [![Stars](https://img.shields.io/github/stars/Shaojie66/spektralab-ai?style=flat)](https://github.com/Shaojie66/spektralab-ai)
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue?style=flat)](license/LICENSE)
@@ -28,8 +26,7 @@
 | **AI 精修** | 最多三轮，只调现有参数——测光、曝光、滤色、颗粒、调色——不碰胶片、裁剪和像素 | 你选的模型 |
 | **人像磨皮** | 人像一节的滑块，在胶片之前抹匀斑驳，颗粒照样落在皮肤上；合影里的小脸也能找到 | 本机，不需要模型 |
 
-所有 AI 改动都能一步撤回；只有你点按钮时照片才会发出去，用本地 Ollama 时什么都不离开这台 Mac。
-每个功能怎么工作、会动什么不会动什么、实测数据：[docs/AI.zh-CN.md](docs/AI.zh-CN.md)。
+所有 AI 改动都能一步撤回；只有你点按钮时照片才会发出去，用本地 Ollama 时什么都不离开这台 Mac。每个功能怎么工作、会动什么不会动什么、实测数据：[docs/AI.zh-CN.md](docs/AI.zh-CN.md)。
 
 ## 基于什么
 
@@ -38,8 +35,7 @@
 - **光谱计算，不是 LUT。** 光线以 81 个波长穿过胶片与相纸各自的染料层，和暗房里的过程一致。
 - **物理尺度。** 告诉它底片是 120 还是 135，颗粒、光晕和成色剂扩散就按画幅以微米为单位缩放。
 - **快。** C++ Metal 引擎直接编译进应用，全分辨率渲染不到一秒。
-- **胶片本身。** 片边、日期后背、半格拼接、设置同步，以及命令行和 MCP 服务——详见
-  [SpektraLab 的 README](https://github.com/JamesQiu2005/SpektraLab/blob/main/README.zh-CN.md)。
+- **胶片本身。** 片边、日期后背、半格拼接、设置同步，以及命令行和 MCP 服务——详见[SpektraLab 的 README](https://github.com/JamesQiu2005/SpektraLab/blob/main/README.zh-CN.md)。
 
 | RAW 解码 ⟷ 胶片与相纸（⌥\\） | 1:1 颗粒 |
 |---|---|
@@ -66,11 +62,9 @@ open build/DerivedData/Build/Products/Debug/SpektraLab.app
 ollama pull gemma4:26b
 ```
 
-然后在 **设置 ▸ AI** 里开启，选 OpenAI 兼容，基础地址 `http://localhost:11434/v1`，模型 `gemma4:26b`。
-用 Claude 的话选 Anthropic 并填入 Key，Key 存在 macOS 钥匙串里。
+然后在 **设置 ▸ AI** 里开启，选 OpenAI 兼容，基础地址 `http://localhost:11434/v1`，模型 `gemma4:26b`。用 Claude 的话选 Anthropic 并填入 Key，Key 存在 macOS 钥匙串里。
 
-`engine/resources/` 有改动时重新运行 `engine/build.sh bundle`。如果 Xcode 突然找不到 `metal`，
-清理一下构建文件夹（⇧⌘K）。
+`engine/resources/` 有改动时重新运行 `engine/build.sh bundle`。如果 Xcode 突然找不到 `metal`，清理一下构建文件夹（⇧⌘K）。
 
 ## 测试
 
@@ -79,8 +73,7 @@ xcodebuild -project Spektrafilm.xcodeproj -scheme SpektrafilmTests \
            -configuration Debug -derivedDataPath build/DerivedData test
 ```
 
-共 629 个测试。相机测试素材不在本仓库里：没有素材时会跳过 76 个，大约 45 秒跑完，
-照样报告 0 失败——看耗时，别只看失败数。想用自己的照片把"打开、配光、全尺寸冲印、导出"
+共 629 个测试。相机测试素材不在本仓库里：没有素材时会跳过 76 个，大约 45 秒跑完，照样报告 0 失败——看耗时，别只看失败数。想用自己的照片把"打开、配光、全尺寸冲印、导出"
 完整走一遍并分步计时：
 
 ```bash
@@ -103,12 +96,10 @@ xcodebuild -project Spektrafilm.xcodeproj -scheme SpektrafilmTests \
 
 ## 与上游的关系
 
-AI 功能曾向上游提交过，现在在这里维护。对 SpektraLab 本身的修复会提交给上游：
-在这里发现的 sidecar 监视器问题，修复已作为 [#54](https://github.com/JamesQiu2005/SpektraLab/pull/54) 合并进上游。
+AI 功能曾向上游提交过，现在在这里维护。对 SpektraLab 本身的修复会提交给上游：在这里发现的 sidecar 监视器问题，修复已作为 [#54](https://github.com/JamesQiu2005/SpektraLab/pull/54) 合并进上游。
 Windows 和 Linux 相关的工作属于上游的 `Windows_Linux` 分支。
 
-AI 功能的问题和想法请提到 [Issues](https://github.com/Shaojie66/spektralab-ai/issues)；
-也欢迎提交 Pull Request：一个提交只做一件事，提交说明写清做了什么、为什么。
+AI 功能的问题和想法请提到 [Issues](https://github.com/Shaojie66/spektralab-ai/issues)；也欢迎提交 Pull Request：一个提交只做一件事，提交说明写清做了什么、为什么。
 
 ## 致谢与许可
 
