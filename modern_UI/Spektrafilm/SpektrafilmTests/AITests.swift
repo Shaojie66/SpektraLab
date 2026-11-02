@@ -412,6 +412,66 @@ final class SkinTests: XCTestCase {
         XCTAssertEqual(out[3], 1, accuracy: 1e-3, "alpha stays 1")
     }
 
+    /// The blotch's amplitude over `rows` and `xs` (whole periods), mean removed.
+    static func blotch(_ px: [Float], rows: Range<Int>, xs: Range<Int>) -> Double {
+        var total = 0.0, n = 0.0
+        for y in rows { for x in xs { total += Double(px[(y * side + x) * 4]); n += 1 } }
+        let mean = total / n
+        var sn = 0.0, cs = 0.0
+        for y in rows { for x in xs {
+            let v = Double(px[(y * side + x) * 4]) - mean
+            sn += v * sin(2 * .pi * Double(x) / period); cs += v * cos(2 * .pi * Double(x) / period)
+        } }
+        return 2 * (sn * sn + cs * cs).squareRoot() / n
+    }
+
+    static func face(_ x: Double, _ y: Double, _ w: Double, _ h: Double) -> SkinMask.Face {
+        SkinMask.Face(box: CGRect(x: x, y: y, width: w, height: h),
+                      outline: [CGPoint(x: x, y: y), CGPoint(x: x + w, y: y), CGPoint(x: x + w, y: y + h), CGPoint(x: x, y: y + h)],
+                      features: [])
+    }
+
+    /// The same 40 px pattern is a blotch on a big face and the face's own
+    /// shape on a small one: each face is smoothed at its own scale.
+    func testEachFaceIsSmoothedAtItsOwnScale() {
+        let big = Self.face(0, 0.2, 0.5, 0.6), small = Self.face(0.78, 0.3, 0.16, 0.4)
+        let input = Self.frame()
+        let before = Self.pixels(input)
+        let out = Self.pixels(SkinSmoothing.apply(input, mask: SkinMask(faces: [big, small]), strength: 1))
+        let bigBefore = Self.blotch(before, rows: 230..<282, xs: 40..<200), bigAfter = Self.blotch(out, rows: 230..<282, xs: 40..<200)
+        let smallBefore = Self.blotch(before, rows: 230..<282, xs: 420..<460), smallAfter = Self.blotch(out, rows: 230..<282, xs: 420..<460)
+        XCTAssertLessThan(bigAfter, bigBefore * 0.4, "a blotch on the big face goes")
+        XCTAssertGreaterThan(smallAfter, smallBefore * 0.7, "the same size on a small face is its shape, and stays")
+    }
+
+    /// A thin dark line through the skin — a glasses frame — keeps its contrast.
+    func testASharpEdgeIsHeldOffTheSmoothing() {
+        let n = Self.side
+        var px = [Float](repeating: 0, count: n * n * 4)
+        for y in 0..<n { for x in 0..<n {
+            let blotch = 0.05 * sin(2 * .pi * Double(x) / Self.period)
+            let line: Double = (x == 120 || x == 121) ? -0.15 : 0
+            let v = Float(0.3 + blotch + line)
+            let i = (y * n + x) * 4
+            px[i] = v; px[i + 1] = v; px[i + 2] = v; px[i + 3] = 1
+        } }
+        let data = px.withUnsafeBufferPointer { Data(buffer: $0) }
+        let input = CIImage(bitmapData: data, bytesPerRow: n * 16, size: CGSize(width: n, height: n),
+                            format: .RGBAf, colorSpace: Self.space)
+        let before = Self.pixels(input)
+        let out = Self.pixels(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 1))
+        func contrast(_ p: [Float]) -> Double {
+            var c = 0.0
+            for y in 230..<282 {
+                let line = Double(p[(y * n + 120) * 4] + p[(y * n + 121) * 4]) / 2
+                let around = Double(p[(y * n + 115) * 4] + p[(y * n + 126) * 4]) / 2
+                c += around - line
+            }
+            return c / 52
+        }
+        XCTAssertGreaterThan(contrast(out), contrast(before) * 0.8, "the frame stays as sharp")
+    }
+
     func testNothingIsDoneAtZeroOrWithoutAFace() {
         let input = Self.frame()
         XCTAssertTrue(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 0) === input)

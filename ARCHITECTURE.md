@@ -589,8 +589,15 @@ through controls a person already has:
   decode — the film edge's own mechanism for "the engine holds another
   picture" — and joins `printStamp`, so neither cache can hand back the
   unsmoothed print. The band-stop is `img + w·(blur(σ₂) − blur(σ₁))` with
-  σ₁ ≈ 0.4 % and σ₂ ≈ 4 % of the median face's width: pores and the face's
-  own light are kept, the blotches between go. Core Image's component
+  σ₁ ≈ 0.4 % and σ₂ ≈ 4 % of **each face's own** width, computed only around
+  that face: pores and the face's own light are kept, the blotches between
+  go. (The first version used the median face, and in a group the small
+  faces at the back were smoothed at the front faces' scale — shape taken
+  for blotches, glasses frames softened.) `w` also carries an edge guard:
+  `CIEdges` above a floor (0.015, so pores and fine texture are left alone)
+  takes the weight to 0 within 1/80, spread 2 px by a minimum filter, which
+  keeps a glasses frame's contrast (92 % on a drawn one, against 51 %
+  before the floor and the spread). Core Image's component
   kernels only; every operand is opaque because Core Image stores colour
   premultiplied (a constant with alpha 0 multiplies to nothing), and the
   summed alpha is set back to 1. `SkinTests` measures it on known pixels
