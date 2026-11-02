@@ -136,7 +136,9 @@ half-frame pairs. Local Ollama (for example `gemma4:26b`) and Claude both work.
 
 **Skin smoothing** is in the Pre-Dev tab, under **Portrait**: a 0–100 slider,
 0 (off) by default, applied when you release it. It needs no API key. Where the Mac's Vision framework finds no
-face the slider is disabled and says why; undo works as usual. Face landmarks are
+face the slider is disabled and says why. It is also disabled when **Don't Apply Film Simulation** is on, because the
+canvas then shows the untouched photo, with "Smoothing is done before the film, so it does not apply with the film
+simulation off." shown under it. Undo works as usual. Face landmarks are
 detected locally, free and with no network. To find the small faces in a group photo,
 faces are looked for on the whole picture and on overlapping tiles of it, and each
 face's landmarks are then read on its own enlarged crop: in tests, 19 faces in a group
