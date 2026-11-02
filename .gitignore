@@ -372,3 +372,4 @@ desktop/src-tauri/tauri.bundle.json
 
 # Local film simulation scratch folder
 You_Still_Fucked_Film_Simulation/
+.gstack/
