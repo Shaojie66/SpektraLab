@@ -150,11 +150,16 @@ turned too far or covered, is left unsmoothed, and the line under the Portrait s
 5% of the photo's long edge (a group of about 25 people at 1440 px, largest face 3.4%), the line
 adds "all small, so it barely shows". AI Refine is given the same two facts. The mask
 covers the face outline with
-the forehead added, cuts out the eyes, brows, lips and nose so the features stay
+the forehead added, cuts out the eyes, brows and lips so the features stay
 sharp, and is pulled in and feathered at the edge, leaving the hairline and
 background alone. Neck and body skin are not touched. It removes mid-scale blotches
 and unevenness while keeping the coarser light and shade of the face, and by default
-the finer pore texture too. The scale is worked out from each face's own size, so a
+the finer pore texture too. How much of a mid-scale swing is removed depends on its
+size against the skin around it: a blotch, an acne mark or redness (10–20% of the
+skin's brightness) is removed, a swing of 50% or more, such as the ridge of a nose, the
+shading beside it or the crease of a nostril's wing, is the shape of the face and is
+kept, and one in between is removed in part. So the nose is smoothed with the rest of
+the face. The scale is worked out from each face's own size, so a
 small face at the back of a group shot is not over-smoothed. Strong lines (glasses frames, strands of hair) and the pixels beside
 them are protected from softening; fine texture such as pores is not affected by that
 protection. Anything on the skin much darker or lighter than the skin around it (under
