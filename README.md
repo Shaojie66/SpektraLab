@@ -118,18 +118,21 @@ separate engine instance, leaving the canvas, edit and undo history alone;
 **Compose** suggests crops. **Recommend crops** first measures one whole-frame proof
 on the Mac with the Vision framework: horizon tilt, visual centre of gravity (saliency)
 and faces. This runs locally, is free and needs no network. It then builds 8–12 crop
-candidates by rule: the subject on a third or centred, at ratios that follow the picture's
-orientation (landscape: original, 3:2, 5:4, 1:1, 16:9; portrait: original, 2:3, 4:5, 1:1,
-9:16), and levelled automatically when the horizon is off by more than 0.5°. Tile 1 is
-always the current framing, for comparison. Hard rules: never cut a face, keep at least
-90% of the salient region, cover at least 40% of the original, and merge
-near-identical candidates. The candidates are rendered as a numbered sheet and the model
-only picks the best three and says why; it never names coordinates, because vision models
-compare pictures well but place a rectangle badly. Each tile uses the same crop transform
-as Apply, so what you see is what you get. **Apply** crops and levels the photo by that
-plan, keeping your earlier 90° turns and flips; **Undo AI changes** restores it in one
-step. Not available with Film Edge on or in half-frame pairs. Local Ollama (for example
-`gemma4:26b`) and Claude both work.
+candidates by rule. A salient region that is a subject (up to 35% of the frame) goes on a
+third or centred. A larger one, as in a landscape or cityscape, is treated as the scene: the
+candidates are the largest crop at each ratio, that crop slid to keep the top or the bottom
+(more sky or more foreground) or the left or the right, and a slightly tighter centred crop.
+Ratios follow the picture's orientation (landscape: original, 3:2, 5:4, 1:1, 16:9; portrait:
+original, 2:3, 4:5, 1:1, 9:16), and candidates are levelled automatically when the horizon is
+off by more than 0.5°. Tile 1 is always the current framing, for comparison. Hard rules:
+never cut a face, keep at least 90% of a subject's salient region (60% for a scene), cover at
+least 40% of the original, and merge near-identical candidates. The candidates are rendered
+as a numbered sheet and the model only picks the best three and says why; it never names
+coordinates, because vision models compare pictures well but place a rectangle badly.
+Each tile uses the same crop transform as Apply, so what you see is what you get.
+**Apply** crops and levels the photo by that plan, keeping your earlier 90° turns and
+flips; **Undo AI changes** restores it in one step. Not available with Film Edge on or in
+half-frame pairs. Local Ollama (for example `gemma4:26b`) and Claude both work.
 
 **Skin smoothing** is in the Pre-Dev tab, under **Portrait**: a 0–100 slider,
 0 (off) by default, applied when you release it. It needs no API key. Where the Mac's Vision framework finds no
