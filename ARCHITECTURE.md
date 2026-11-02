@@ -597,10 +597,18 @@ through controls a person already has:
   plain blur moved skin beside a drawn dark lip by 0.066 of 0.4, and on a
   close selfie at full strength darkened skin overall by 4.5 levels (2.4
   after). The reciprocal is Newton's (`reciprocal`): Core Image's divide, on
-  the GPU, returned the quotient less the divisor, and clamps to 0…1. What
-  remains at full strength is the band's own flattening of the shading
-  beside the nose and lip, and jagged edges along a glasses frame from the
-  guard's hard edge. With
+  the GPU, returned the quotient less the divisor, and clamps to 0…1; the
+  component kernels sum alpha as they go, so alpha is set back to 1 after
+  each step, or a filter that unpremultiplies reads the colour as nearly 0.
+  **A dark or light object on the skin is not a blotch**
+  (`SkinSmoothing.objectGuard`): under 0.35 of the skin around it (fully by
+  0.15) or over 1.8 times it, a pixel is neither smoothed nor averaged in,
+  the guard softened by 0.5 % of the face. The edge guard holds off only an
+  object's rim, and the band filled a glasses' nose pad with skin, leaving
+  a hollow outline that read as a jagged, broken frame; a first threshold
+  of 0.6 held off a lip's shadow, stubble and a nostril's rim in hard-edged
+  patches. A very dark mole is kept. What remains at full strength is the
+  band's own flattening of the shading beside the nose and lip. With
   σ₁ ≈ 0.4 % and σ₂ ≈ 4 % of **each face's own** width, computed only around
   that face: pores and the face's own light are kept, the blotches between
   go. (The first version used the median face, and in a group the small

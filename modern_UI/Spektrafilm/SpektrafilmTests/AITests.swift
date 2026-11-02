@@ -671,6 +671,41 @@ final class SkinTests: XCTestCase {
         XCTAssertLessThan(worst, 0.01, "skin beside the lip moved by \(worst) of 0.4")
     }
 
+    /// A dark object lying on the skin — a glasses' nose pad, a thick
+    /// bridge — is not a blotch: the edge guard holds off only its rim, and
+    /// the band filled its inside with skin, leaving a hollow outline that
+    /// read as a jagged, broken frame (a close selfie at full strength). Its
+    /// inside keeps its tone; a blotch beside it still goes.
+    func testADarkObjectOnTheSkinIsNotFilledIn() {
+        let n = Self.side
+        let pad = CGRect(x: 230, y: 216, width: 14, height: 80)          // a nose pad, 14 px wide
+        var px = [Float](repeating: 0, count: n * n * 4)
+        for y in 0..<n {
+            for x in 0..<n {
+                let blotch = 0.05 * sin(2 * .pi * Double(x) / Self.period)
+                let checker = (x + y) % 2 == 0 ? 0.02 : -0.02
+                let v: Double = pad.contains(CGPoint(x: x, y: y)) ? 0.03 : 0.3 + blotch + checker
+                let i = (y * n + x) * 4
+                px[i] = Float(v); px[i + 1] = Float(v); px[i + 2] = Float(v); px[i + 3] = 1
+            }
+        }
+        let input = CIImage(bitmapData: px.withUnsafeBufferPointer { Data(buffer: $0) }, bytesPerRow: n * 16,
+                            size: CGSize(width: n, height: n), format: .RGBAf, colorSpace: Self.space)
+        let whole = SkinMask(faces: [SkinMask.Face(
+            box: CGRect(x: 0, y: 0, width: 1, height: 1),
+            outline: [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)],
+            features: [])])
+        let out = Self.pixels(SkinSmoothing.apply(input, mask: whole, strength: 1, soft: 1))
+        // The pad's inside, 3 px in from its rim (symmetric in y: the bitmap
+        // may be flipped).
+        var inside = 0.0, count = 0.0
+        for y in 230..<282 { for x in 234..<240 { inside += Double(out[(y * n + x) * 4]); count += 1 } }
+        inside /= count
+        XCTAssertLessThan(inside, 0.06, "the pad's inside kept its tone (\(inside), was 0.03)")
+        let far = Self.amplitudes(out, x0: 40, x1: 200)
+        XCTAssertLessThan(far.blotch, 0.05 * 0.12, "the blotch beside it still goes (\(far.blotch))")
+    }
+
     func testNothingIsDoneAtZeroOrWithoutAFace() {
         let input = Self.frame()
         XCTAssertTrue(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 0) === input)

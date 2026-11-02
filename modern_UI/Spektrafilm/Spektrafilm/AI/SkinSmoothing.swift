@@ -80,9 +80,17 @@ enum SkinSmoothing {
             let region = box.insetBy(dx: -box.width * 0.4 - sigma2 * 3, dy: -box.height * 0.4 - sigma2 * 3)
                 .intersection(extent)
             guard !region.isEmpty else { continue }
-            // The averages are over this face's skin: what the mask cuts out
-            // and the guard holds off is not averaged in.
-            let weight = multiply(m, keep).clampedToExtent()
+            // The averages are over this face's skin: what the mask cuts out,
+            // what the edge guard holds off, and what is too dark or too
+            // light against the skin around it to be a blotch (a nose pad,
+            // a lens's glare) is not averaged in, and not smoothed.
+            let skin = multiply(m, keep).clampedToExtent()
+            let around = weightedBlur(base, weight: skin, sigma: sigma2, region: region)
+            // Softened by a share of the face, so its edge is not a line of
+            // its own across stubble or a shadow.
+            let objects = objectGuard(base.cropped(to: region), around: around, region: region)
+                .clampedToExtent().applyingGaussianBlur(sigma: max(1, faceWidth * objectSoftness)).cropped(to: region)
+            let weight = multiply(skin, objects.clampedToExtent())
             let b1 = weightedBlur(base, weight: weight, sigma: sigma1, region: region)
             let b2 = weightedBlur(base, weight: weight, sigma: sigma2, region: region)
             var band = add(b2, multiply(b1, constant(-1, over: region)))             // b2 − b1
@@ -91,8 +99,7 @@ enum SkinSmoothing {
                 let fine = add(b1, multiply(base.cropped(to: region), constant(-1, over: region)))
                 band = add(band, multiply(fine, constant(softness * min(1, soft), over: region)))
             }
-            let w = multiply(multiply(m.cropped(to: region), keep.cropped(to: region)),
-                             constant(s, over: region))                               // strength × mask × guard
+            let w = multiply(weight.cropped(to: region), constant(s, over: region))       // strength × mask × guards
             out = add(out, multiply(band, w))
         }
         return out.settingAlphaOne(in: extent).cropped(to: extent)
@@ -129,24 +136,81 @@ enum SkinSmoothing {
     static func weightedBlur(_ image: CIImage, weight: CIImage, sigma: Double, region: CGRect) -> CIImage {
         let num = multiply(image, weight).applyingGaussianBlur(sigma: sigma).cropped(to: region)
         let den = weight.applyingGaussianBlur(sigma: sigma).cropped(to: region)
-        return multiply(num, reciprocal(den, over: region))
+        return multiply(num, reciprocal(den, over: region)).settingAlphaOne(in: region)
     }
 
     /// Where less than this share of a blur's reach is skin, the average is
     /// not trusted: the weight there is nearly 0 as well.
     static let weightFloor = 0.02
 
-    /// `1 / max(d, weightFloor)` by Newton's step `r ← r(2 − d·r)` from 1,
-    /// which for d in [0.02, 1] is within 1e-8 after ten. Not Core Image's
-    /// divide: measured 2026-11-02, on the GPU it returned the quotient
-    /// less the divisor (0.0203 / 1 → −0.98), and it clamps to 0…1.
-    static func reciprocal(_ d: CIImage, over region: CGRect) -> CIImage {
-        let floored = CIBlendKernel.componentMax.apply(foreground: constant(weightFloor, over: region), background: d) ?? d
+    /// `1 / d` for d held within `floor`…1.9, by Newton's step
+    /// `r ← r(2 − d·r)` from 1: the error squares each step, so from the
+    /// floor's 1 − floor it is under 1e-8 after `steps` of them. Not Core
+    /// Image's divide: measured 2026-11-02, on the GPU it returned the
+    /// quotient less the divisor (0.0203 / 1 → −0.98), and it clamps to 0…1.
+    static func reciprocal(_ d: CIImage, floor: Double = weightFloor, over region: CGRect) -> CIImage {
+        let held = CIBlendKernel.componentMin.apply(
+            foreground: constant(1.9, over: region),
+            background: CIBlendKernel.componentMax.apply(foreground: constant(floor, over: region), background: d) ?? d) ?? d
+        let steps = Int(ceil(log2(log(1e-8) / log(1 - floor))))
         var r = constant(1, over: region)
-        for _ in 0..<10 {
-            r = multiply(r, add(constant(2, over: region), multiply(multiply(floored, r), constant(-1, over: region))))
+        for _ in 0..<steps {
+            // Alpha back to 1 each step: the component kernels add and
+            // multiply it too, and twelve steps took it past half float's
+            // range. A filter that unpremultiplies (CIColorMatrix) then read
+            // the colour as nearly 0.
+            r = multiply(r, add(constant(2, over: region), multiply(multiply(held, r), constant(-1, over: region))))
+                .settingAlphaOne(in: region)
         }
         return r
+    }
+
+    /// Where a pixel's luminance lies against the skin around it, as a share
+    /// of it, an object begins: below `objectDark` (fully held off by
+    /// `objectDark` − `darkWidth`), above `objectLight` (fully by + 0.7). A
+    /// blotch or a red mark is within 10–20 % of the skin around it; a
+    /// glasses' nose pad is a tenth of it, and the band, which held off only
+    /// its rim, filled its inside with skin. Not higher: at 0.6 the shadow
+    /// under a lip, stubble and a nostril's rim (0.4–0.6) were held off too,
+    /// in hard-edged patches beside smoothed skin, on a close selfie at full
+    /// strength. A very dark mole is kept.
+    static let objectDark = 0.35
+    static let darkWidth = 0.2
+    static let objectLight = 1.8
+    /// The guard's own softening, as a share of the face's width.
+    static let objectSoftness = 0.005
+
+    /// 1 on skin, 0 on what is too dark or too light against `around` to be
+    /// skin. Opaque grey.
+    static func objectGuard(_ image: CIImage, around: CIImage, region: CGRect) -> CIImage {
+        let ratio = multiply(luminance(image), reciprocal(luminance(around), floor: 0.005, over: region))
+            .settingAlphaOne(in: region)
+        func ramp(_ gain: Double, _ bias: Double) -> CIImage {
+            ratio.applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: gain, y: 0, z: 0, w: 0),
+                "inputGVector": CIVector(x: gain, y: 0, z: 0, w: 0),
+                "inputBVector": CIVector(x: gain, y: 0, z: 0, w: 0),
+                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputBiasVector": CIVector(x: bias, y: bias, z: bias, w: 1),
+            ]).applyingFilter("CIColorClamp", parameters: [
+                "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 1),
+                "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
+            ])
+        }
+        let lightWidth = 0.7
+        let dark = ramp(1 / darkWidth, -(objectDark - darkWidth) / darkWidth)        // 0 at dark − width, 1 at dark
+        let light = ramp(-1 / lightWidth, (objectLight + lightWidth) / lightWidth)  // 1 at light, 0 at light + width
+        return multiply(dark, light).cropped(to: region)
+    }
+
+    /// Rec. 709 luminance in every channel, alpha 1.
+    private static func luminance(_ image: CIImage) -> CIImage {
+        let v = CIVector(x: 0.2126, y: 0.7152, z: 0.0722, w: 0)
+        return image.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": v, "inputGVector": v, "inputBVector": v,
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+        ])
     }
 
     // MARK: component arithmetic
