@@ -16,7 +16,7 @@ import Foundation
 
 struct CompositionCandidate: Equatable, Sendable {
     enum Kind: String, Sendable {
-        case current, level, thirds, thirdsTight, centred, ratio
+        case current, level, thirds, thirdsTight, centred, ratio, anchored
     }
     let geometry: Geometry
     let kind: Kind
@@ -61,20 +61,45 @@ enum CompositionCandidates {
             add(place(current: current, aspect: .original, sourceAspect: sourceAspect, fraction: 1,
                       centre: CGPoint(x: 0.5, y: 0.5), angle: angle, in: size), .level, .original)
         }
-        let subject = a.subject
-        for shown in aspects(landscape: landscape) {
-            let crop = oddTurns && shown != .original ? shown.transposed : shown
-            if let s = subject {
-                let sc = CGPoint(x: s.midX, y: s.midY)
+        let ratios = aspects(landscape: landscape).map { shown in
+            (shown: shown, crop: oddTurns && shown != .original ? shown.transposed : shown)
+        }
+        if let s = a.subject, !isScene(s) {
+            // A subject: on a third, tighter on a third, or centred.
+            let sc = CGPoint(x: s.midX, y: s.midY)
+            for r in ratios {
                 for (fraction, kind) in [(1.0, CompositionCandidate.Kind.thirds), (0.8, .thirdsTight)] {
-                    add(thirds(current: current, aspect: crop, sourceAspect: sourceAspect, fraction: fraction,
-                               subject: sc, eyes: !a.faces.isEmpty, angle: angle, in: size), kind, shown)
+                    add(thirds(current: current, aspect: r.crop, sourceAspect: sourceAspect, fraction: fraction,
+                               subject: sc, eyes: !a.faces.isEmpty, angle: angle, in: size), kind, r.shown)
                 }
-                add(place(current: current, aspect: crop, sourceAspect: sourceAspect, fraction: 0.85,
-                          centre: sc, angle: angle, in: size), .centred, shown)
-            } else {
-                add(place(current: current, aspect: crop, sourceAspect: sourceAspect, fraction: 1,
-                          centre: CGPoint(x: 0.5, y: 0.5), angle: angle, in: size), .ratio, shown)
+                add(place(current: current, aspect: r.crop, sourceAspect: sourceAspect, fraction: 0.85,
+                          centre: sc, angle: angle, in: size), .centred, r.shown)
+            }
+        } else {
+            // A scene, or nothing in particular: what a crop decides is how much
+            // sky and how much foreground (or of each side) it keeps. Placement
+            // by placement across the ratios, so the limit drops a placement
+            // rather than a whole ratio.
+            func largest(_ r: CropAspect, _ c: CGPoint) -> Geometry? {
+                place(current: current, aspect: r, sourceAspect: sourceAspect, fraction: 1, centre: c, angle: angle, in: size)
+            }
+            let centred = ratios.map { (r: $0, g: largest($0.crop, CGPoint(x: 0.5, y: 0.5))) }
+            for x in centred { add(x.g, .ratio, x.r.shown) }
+            for x in centred {
+                guard let g = x.g else { continue }
+                let cw = Double(g.crop.width), ch = Double(g.crop.height)
+                if ch < 0.97 {
+                    add(largest(x.r.crop, CGPoint(x: 0.5, y: ch / 2)), .anchored, x.r.shown)       // keeps the top
+                    add(largest(x.r.crop, CGPoint(x: 0.5, y: 1 - ch / 2)), .anchored, x.r.shown)   // keeps the bottom
+                }
+                if cw < 0.97 {
+                    add(largest(x.r.crop, CGPoint(x: cw / 2, y: 0.5)), .anchored, x.r.shown)
+                    add(largest(x.r.crop, CGPoint(x: 1 - cw / 2, y: 0.5)), .anchored, x.r.shown)
+                }
+            }
+            for r in ratios {
+                add(place(current: current, aspect: r.crop, sourceAspect: sourceAspect, fraction: 0.85,
+                          centre: CGPoint(x: 0.5, y: 0.5), angle: angle, in: size), .centred, r.shown)
             }
         }
         return Array(out.prefix(limit))
@@ -155,12 +180,22 @@ enum CompositionCandidates {
         // the subject's centre was required at first, and a tight crop of a
         // night sky took the top off the firework the whole picture is of.
         for f in a.faces where !contains(g, f, in: size) { return false }
-        if let s = a.subject, a.faces.isEmpty, coverage(g, s, in: size) < subjectKept { return false }
+        if let s = a.subject, a.faces.isEmpty,
+           coverage(g, s, in: size) < (isScene(s) ? sceneKept : subjectKept) { return false }
         return true
     }
 
     /// The share of the subject a crop must keep.
     static let subjectKept = 0.9
+    /// A salient region larger than this share of the frame is the scene, not
+    /// a subject: a landscape's came back the whole width and 75 % of the
+    /// frame, and keeping 90 % of it left three crops. A firework's (about a
+    /// third) is still a subject.
+    static let sceneArea = 0.35
+    /// The share of a scene a crop must keep.
+    static let sceneKept = 0.6
+
+    static func isScene(_ r: CGRect) -> Bool { Double(r.width * r.height) > sceneArea }
 
     /// The fraction of `r` (normalised, top-left) inside the crop at its
     /// angle, sampled on a grid — exact enough for a 10 % threshold.

@@ -609,6 +609,26 @@ final class CompositionTests: XCTestCase {
         }
     }
 
+    /// A landscape's salient region is the scene, not a subject: the river
+    /// frame's was the whole width and 75 % of the frame, and keeping 90 % of
+    /// it left only three crops. A scene is kept at 60 %, and the crops are
+    /// placed by how much sky and how much foreground they keep.
+    func testASceneGetsCropsPlacedForSkyAndForeground() {
+        let scene = CGRect(x: 0, y: 0.19, width: 1, height: 0.75)
+        let a = CompositionAnalysis(straighten: 0, horizonTilt: nil, salient: [scene], faces: [])
+        let size = CGSize(width: 1568, height: 1176)
+        let c = CompositionCandidates.make(current: .default, analysis: a, imageSize: size)
+        XCTAssertGreaterThanOrEqual(c.count, 6, "a landscape has crops to choose among (\(c.count))")
+        let crops = c.dropFirst().map(\.geometry.crop)
+        XCTAssertTrue(crops.contains { $0.y < 0.01 && $0.height < 0.95 }, "one keeps the sky and trims the foreground")
+        XCTAssertTrue(crops.contains { $0.y + $0.height > 0.99 && $0.y > 0.05 }, "one keeps the foreground and trims the sky")
+        XCTAssertTrue(c.contains { $0.label == "1:1" }, "a square is among them")
+        for x in c.dropFirst() {
+            XCTAssertGreaterThanOrEqual(CompositionCandidates.coverage(x.geometry, scene, in: size),
+                                        CompositionCandidates.sceneKept, "\(x.label) keeps most of the scene")
+        }
+    }
+
     func testAFaceIsNeverCut() {
         let face = CGRect(x: 0.03, y: 0.2, width: 0.12, height: 0.18)
         let a = CompositionAnalysis(straighten: 0, horizonTilt: nil, salient: [], faces: [face])
@@ -1236,5 +1256,79 @@ final class SkinPhotoTests: XCTestCase {
         _ = try await ws.preview(to: out.appending(path: "skin-\(Int((strength * 100).rounded()))\(soft ? "-soft" : "").jpg"),
                                  longEdge: edge)
         print("SKIN wrote", out.path)
+    }
+}
+
+/// Composition alone on a real photograph, against a real model: what Vision
+/// measured, the whole sheet of crops, the model's three, and the best one
+/// applied at full size. **Opt-in** (`SPK_AI_E2E`, `SPK_AI_MODEL`,
+/// `SPK_AI_IMAGE`, `SPK_COMPOSE_OUT`), like `AIEndToEndTests`.
+@MainActor
+final class CompositionPhotoTests: XCTestCase {
+    func testComposingARealPhoto() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let base = env["SPK_AI_E2E"], let model = env["SPK_AI_MODEL"], let source = env["SPK_AI_IMAGE"] else {
+            throw XCTSkip("SPK_AI_E2E, SPK_AI_MODEL and SPK_AI_IMAGE are not set")
+        }
+        let out = URL(fileURLWithPath: env["SPK_COMPOSE_OUT"] ?? NSTemporaryDirectory())
+        let dir = FileManager.default.temporaryDirectory.appending(path: "spk-compose-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: URL(fileURLWithPath: source).lastPathComponent)
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: source), to: url)
+        let saved = (AISettings.enabled, AISettings.provider, AISettings.openAIBaseURL, AISettings.openAIModel)
+        addTeardownBlock { @MainActor in
+            (AISettings.enabled, AISettings.provider, AISettings.openAIBaseURL, AISettings.openAIModel) = saved
+        }
+        AISettings.enabled = true
+        AISettings.provider = .openAICompatible
+        AISettings.openAIBaseURL = base
+        AISettings.openAIModel = model
+
+        let ws = AgentWorkspace()
+        ws.timeout = 120
+        try await ws.open(url.path)
+        try await ws.process()
+        let s = ws.session
+
+        // What the assistant measures and offers, drawn here so the sheet can be kept.
+        let p = s.params
+        let film = try XCTUnwrap(ProofSheet.candidate(film: p.filmStock, paper: p.scanFilm ? nil : p.printStock, catalog: s.catalog))
+        let proof = try await ProofSheet.render(session: s, candidates: [film], longEdge: AIAssistant.compositionLongEdge,
+                                                wholeFrame: true)[0].image
+        let analysis = try CompositionAnalysis.analyse(proof)
+        print("COMPOSE horizon tilt:", analysis.horizonTilt.map { String(format: "%+.2f°", $0) } ?? "none",
+              "straighten:", analysis.straighten, "salient:", analysis.salient.count, "faces:", analysis.faces.count)
+        for r in analysis.salient {
+            print(String(format: "COMPOSE salient x %.2f–%.2f y %.2f–%.2f (area %.0f%%)", r.minX, r.maxX, r.minY, r.maxY, r.width * r.height * 100))
+        }
+        let candidates = CompositionCandidates.make(current: s.geometry, analysis: analysis,
+                                                    imageSize: CGSize(width: proof.width, height: proof.height))
+        let tiles = candidates.enumerated().compactMap { i, c -> ProofSheet.Tile? in
+            CompositionCandidates.render(c.geometry, from: proof, longEdge: 400).map {
+                ProofSheet.Tile(image: $0, title: "\(i + 1)  \(c.kind == .current ? "current" : c.label)",
+                                subtitle: c.straightened ? String(format: "levelled %+.1f°", c.geometry.angle)
+                                    : "\(Int((c.geometry.crop.width * c.geometry.crop.height * 100).rounded()))% of frame")
+            }
+        }
+        if let sheet = ProofSheet.sheet(tiles) { try ProofSheet.writeJPEG(sheet, to: out.appending(path: "candidates.jpg")) }
+
+        let assistant = AIAssistant(session: s)
+        assistant.intent = env["SPK_AI_INTENT"] ?? ""
+        assistant.recommendComposition()
+        try await Task.sleep(for: .milliseconds(50))
+        while assistant.busy { try await Task.sleep(for: .milliseconds(200)) }
+        XCTAssertNil(assistant.error, assistant.error ?? "")
+        let rec = try XCTUnwrap(assistant.composition)
+        print("COMPOSE summary:", rec.summary, "compared:", rec.compared)
+        for p in rec.picks {
+            print("COMPOSE pick \(p.index) \(p.candidate.kind.rawValue) \(p.candidate.label) angle \(p.candidate.geometry.angle) score \(p.score): \(p.reason)")
+        }
+        let best = try XCTUnwrap(rec.picks.first)
+        assistant.applyComposition(best)
+        try await ws.settle()
+        XCTAssertTrue(assistant.isCurrent(best))
+        let edge = min(4096, Int(s.sourceLongEdge))
+        _ = try await ws.preview(to: out.appending(path: "best-full.jpg"), longEdge: edge)
     }
 }
