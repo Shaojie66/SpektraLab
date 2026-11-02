@@ -137,7 +137,12 @@ half-frame pairs. Local Ollama (for example `gemma4:26b`) and Claude both work.
 **Skin smoothing** is in the Pre-Dev tab, under **Portrait**: a 0–100 slider,
 0 (off) by default, applied when you release it. It needs no API key. Where the Mac's Vision framework finds no
 face the slider is disabled and says why; undo works as usual. Face landmarks are
-detected locally, free and with no network. The mask covers the face outline with
+detected locally, free and with no network. To find the small faces in a group photo,
+faces are looked for on the whole picture and on overlapping tiles of it, and each
+face's landmarks are then read on its own enlarged crop: in tests, 19 faces in a group
+of about 25 people (7 when looking at the whole picture only) and 8 in a group of 10
+(6). Faces mostly hidden behind someone, or turned far away, are not found. The mask
+covers the face outline with
 the forehead added, cuts out the eyes, brows, lips and nose so the features stay
 sharp, and is pulled in and feathered at the edge, leaving the hairline and
 background alone. Neck and body skin are not touched. It removes mid-scale blotches
