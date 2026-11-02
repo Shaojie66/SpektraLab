@@ -284,9 +284,12 @@ enum AIPrompts {
     @MainActor
     static func refinerUser(document: JSONValue, latitude: JSONValue?, film: String?, exif: EXIFReadout?,
                             intent: String, history: [AIAssistant.Step], feedback: String?,
-                            round: Int, of total: Int, faces: SkinMask? = nil) -> String {
+                            round: Int, of total: Int, faces: SkinMask? = nil, noFilm: Bool = false) -> String {
         var lines = ["The print above, round \(round) of \(total). Film: \(film ?? "?")."]
-        if let faces {
+        if noFilm {
+            lines.append("The film simulation is off for this frame, and skin smoothing is done before the film, "
+                         + "so it does not show: leave it at 0.")
+        } else if let faces {
             if faces.isEmpty {
                 lines.append("No faces were found: leave skin smoothing at 0.")
             } else {

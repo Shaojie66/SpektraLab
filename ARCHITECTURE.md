@@ -639,7 +639,11 @@ through controls a person already has:
   showed only at 2×). The refiner is told both, so it need not judge a
   face's size by eye. The skin mask is cached per frame and decode
   (`Session.skinMaskState`); faces and strength are the photograph's own,
-  so the Settings clipboard does not copy it. Not on a pair.
+  so the Settings clipboard does not copy it. Not on a pair, and not with
+  the film simulation off: the canvas shows the untouched decode there (the
+  smoothing is of the frame handed to the film), so the slider is grey and
+  says why on its own line, and the refiner is told to leave it at 0 — it
+  had been live, and moved nothing on screen.
 - **Settling is on the wire.** A crop re-resolves `dateBack.framing`,
   `dateBack.frameScale` and `filmEdge.framing` without asking for a print (in
   the window it is a draw), and none of them is on the wire, so

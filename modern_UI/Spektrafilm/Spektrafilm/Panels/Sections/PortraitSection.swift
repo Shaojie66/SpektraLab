@@ -38,13 +38,30 @@ struct PortraitSection: View {
         .task(id: session.selection) { await session.refreshSkinMask() }
     }
 
-    private var usable: Bool { session.pair == nil && (faces ?? 0) > 0 }
-    private var reason: String {
-        session.pair != nil ? L("Not available on a half-frame pair yet.", zh: "暂不支持半格拼接。")
-                            : L("No face was found in this frame.", zh: "这张照片里没有检测到人脸。")
+    private var unavailable: String? {
+        Self.unavailable(pair: session.pair != nil, noFilm: session.noFilm, faces: faces)
+    }
+    private var usable: Bool { unavailable == nil }
+    private var reason: String { unavailable ?? "" }
+
+    /// Why skin smoothing cannot be used on this frame; nil when it can.
+    /// With the film simulation off the canvas shows the untouched decode —
+    /// the smoothing is done to the frame handed to the film — so a slider
+    /// left live there moved nothing on screen.
+    static func unavailable(pair: Bool, noFilm: Bool, faces: Int?) -> String? {
+        if pair { return L("Not available on a half-frame pair yet.", zh: "暂不支持半格拼接。") }
+        if noFilm {
+            return L("Smoothing is done before the film, so it does not apply with the film simulation off.",
+                     zh: "磨皮在胶片之前处理，关闭胶片模拟时不生效。")
+        }
+        if (faces ?? 0) == 0 { return L("No face was found in this frame.", zh: "这张照片里没有检测到人脸。") }
+        return nil
     }
 
     private var sublabel: String {
+        // Said on the row, not only in the disabled row's help: it is why
+        // the slider is grey.
+        if session.noFilm, let why = unavailable { return why }
         guard let mask = session.skinFaces else { return L("Looking for faces…", zh: "正在检测人脸……") }
         return Self.note(mask)
     }

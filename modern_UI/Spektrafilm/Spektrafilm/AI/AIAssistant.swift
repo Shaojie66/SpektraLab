@@ -336,7 +336,7 @@ final class AIAssistant {
                     parts: [.jpeg(jpeg), .text(AIPrompts.refinerUser(
                         document: try ws.document, latitude: latitude, film: session.catalog.stock(session.params.filmStock)?.name,
                         exif: session.exif, intent: intent, history: steps, feedback: feedback,
-                        round: round, of: Self.maxRounds, faces: faces))],
+                        round: round, of: Self.maxRounds, faces: faces, noFilm: session.noFilm))],
                     schema: AIPrompts.refinerSchema))
                 try Task.checkCancellation()
                 guard session.selection == url else { return }

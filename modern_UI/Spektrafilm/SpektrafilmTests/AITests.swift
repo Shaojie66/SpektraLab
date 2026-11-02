@@ -243,6 +243,23 @@ final class AIUnitTests: XCTestCase {
         let crowd = told(SkinMask(faces: [SkinTests.face(0.2, 0.3, 0.03, 0.04)], missed: 4, aspect: 4.0 / 3))
         XCTAssertTrue(crowd.contains("4 more were too small or turned"), crowd)
         XCTAssertTrue(crowd.contains("All are small (the largest is 3% of the long edge)"), crowd)
+        let bare = AIPrompts.refinerUser(document: ["params": [:], "adjustments": [:]], latitude: nil, film: nil, exif: nil,
+                                         intent: "", history: [], feedback: nil, round: 1, of: 3,
+                                         faces: SkinMask(faces: [big, big]), noFilm: true)
+        XCTAssertTrue(bare.contains("film simulation is off"), bare)
+        XCTAssertFalse(bare.contains("2 face(s) found"), "not offered faces it cannot smooth")
+    }
+
+    /// With the film simulation off the canvas shows the untouched decode, so
+    /// the slider is grey and says why; a pair, and a frame with no face,
+    /// keep their own reasons.
+    func testSkinSmoothingIsOffWithTheFilmSimulationOff() {
+        XCTAssertNil(PortraitSection.unavailable(pair: false, noFilm: false, faces: 2))
+        let bare = PortraitSection.unavailable(pair: false, noFilm: true, faces: 2)
+        XCTAssertNotNil(bare)
+        XCTAssertNotEqual(bare, PortraitSection.unavailable(pair: false, noFilm: false, faces: 0))
+        XCTAssertNotEqual(bare, PortraitSection.unavailable(pair: true, noFilm: true, faces: 2), "a pair says it is a pair")
+        XCTAssertNotNil(PortraitSection.unavailable(pair: false, noFilm: false, faces: nil), "still looking: not yet")
     }
 
     /// The Portrait section says who is left alone, and when every face is
