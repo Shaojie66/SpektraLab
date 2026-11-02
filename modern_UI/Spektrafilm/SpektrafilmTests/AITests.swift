@@ -226,6 +226,18 @@ final class AIUnitTests: XCTestCase {
         XCTAssertNil(both.patch)
     }
 
+    func testRefiningMaySmoothSkinAndIsToldAboutFaces() throws {
+        XCTAssertNoThrow(try AIPrompts.checkScope(["params": ["retouch": ["skinSmoothing": 0.3]]]))
+        XCTAssertThrowsError(try AIPrompts.checkScope(["params": ["retouch": ["skinSmoothing": 1.5]]]), "the range holds")
+        XCTAssertTrue(AIPrompts.refinerSystem.contains("params.retouch.skinSmoothing"))
+        let none = AIPrompts.refinerUser(document: ["params": [:], "adjustments": [:]], latitude: nil, film: nil, exif: nil,
+                                         intent: "", history: [], feedback: nil, round: 1, of: 3, faces: 0)
+        XCTAssertTrue(none.contains("No faces were found"))
+        let two = AIPrompts.refinerUser(document: ["params": [:], "adjustments": [:]], latitude: nil, film: nil, exif: nil,
+                                        intent: "", history: [], feedback: nil, round: 1, of: 3, faces: 2)
+        XCTAssertTrue(two.contains("2 face(s) found"))
+    }
+
     func testAMeterIsReadStrictlyAndRefiningMayChangeIt() throws {
         XCTAssertEqual(try AIPrompts.readMeter(["meter": "protect_highlights", "reason": "night"]).meter, .protectHighlights)
         XCTAssertThrowsError(try AIPrompts.readMeter(["meter": "spot", "reason": ""]))

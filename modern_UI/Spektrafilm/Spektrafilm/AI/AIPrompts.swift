@@ -22,6 +22,7 @@ enum AIPrompts {
         "params.exposureCompensationEV", "params.printBrightnessStops",
         "params.yFilterShift", "params.mFilterShift", "params.preflashExposure",
         "params.grainActive", "params.halationActive", "params.effects.grain", "params.effects.halation",
+        "params.retouch.skinSmoothing",
         "adjustments",
     ]
 
@@ -241,6 +242,13 @@ enum AIPrompts {
         move has gone far enough. Then hold the rest with Post-Dev colour balance by tonal zone (for example \
         a touch of blue back into the highlights) instead of pushing the filters further.
 
+        Skin smoothing (params.retouch.skinSmoothing, 0 to 1) evens out skin on the faces that were found, \
+        before the film, so the grain stays. Use it only when faces were found and the person wants a \
+        portrait cleaned up or the skin is clearly blotchy: about 0.2–0.4 for a natural portrait, rarely \
+        above 0.6, and leave it at 0 for a scene where people are small or incidental. Skin that looks waxy \
+        or flat has been smoothed too far. Changing it re-develops the frame, so set it once rather than \
+        nudging it every round.
+
         Look at the print. Make small, deliberate moves — a filter shift of 0.02 to 0.08, a few points on a \
         slider — because you will see the result and can go further next round. Values you write are the new \
         absolute values, not offsets. Honour the person's intent; with none, aim for a natural, well-exposed \
@@ -274,8 +282,12 @@ enum AIPrompts {
     @MainActor
     static func refinerUser(document: JSONValue, latitude: JSONValue?, film: String?, exif: EXIFReadout?,
                             intent: String, history: [AIAssistant.Step], feedback: String?,
-                            round: Int, of total: Int) -> String {
+                            round: Int, of total: Int, faces: Int? = nil) -> String {
         var lines = ["The print above, round \(round) of \(total). Film: \(film ?? "?")."]
+        if let faces {
+            lines.append(faces == 0 ? "No faces were found: leave skin smoothing at 0."
+                                    : "\(faces) face(s) found, so skin smoothing applies to them.")
+        }
         lines.append("Fields you may write (path, type and range, meaning):")
         for field in AgentSchema.fields where field.readOnly == nil && isRefinable(field.path) {
             let j = field.json
