@@ -311,6 +311,112 @@ final class AIUnitTests: XCTestCase {
     }
 }
 
+/// Skin smoothing: the band-stop's arithmetic, measured on known pixels in the
+/// Core Image context the engine's frame is rendered with.
+@MainActor
+final class SkinTests: XCTestCase {
+    static let side = 512
+    static let period = 40.0      // between the band's edges: should go
+    static let space = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
+
+    /// 0.3 grey + a mid-scale blotch (sine, period 40 px) + a fine 2 px checker.
+    static func frame() -> CIImage {
+        let n = side
+        var px = [Float](repeating: 0, count: n * n * 4)
+        for y in 0..<n {
+            for x in 0..<n {
+                let blotch = 0.05 * sin(2 * .pi * Double(x) / period)
+                let checker = ((x + y) % 2 == 0 ? 0.02 : -0.02)
+                let v = Float(0.3 + blotch + checker)
+                let i = (y * n + x) * 4
+                px[i] = v; px[i + 1] = v; px[i + 2] = v; px[i + 3] = 1
+            }
+        }
+        let data = px.withUnsafeBufferPointer { Data(buffer: $0) }
+        return CIImage(bitmapData: data, bytesPerRow: n * 16, size: CGSize(width: n, height: n),
+                       format: .RGBAf, colorSpace: space)
+    }
+
+    static func pixels(_ image: CIImage) -> [Float] {
+        let n = side
+        var out = [Float](repeating: 0, count: n * n * 4)
+        out.withUnsafeMutableBytes { buf in
+            ImageDecoder.context.render(image, toBitmap: buf.baseAddress!, rowBytes: n * 16,
+                                        bounds: CGRect(x: 0, y: 0, width: n, height: n),
+                                        format: .RGBAf, colorSpace: space)
+        }
+        return out
+    }
+
+    /// The mean, and the amplitudes of the blotch and of the checker, over
+    /// rows 200–311 between `x0` and `x1`, by projection on the mean-removed
+    /// values. The range must hold whole periods: a first version did not,
+    /// and the offset of a broken smoothing leaked into the projection and
+    /// read as a smaller blotch.
+    static func amplitudes(_ px: [Float], x0: Int, x1: Int) -> (mean: Double, blotch: Double, checker: Double) {
+        precondition(Double(x1 - x0).truncatingRemainder(dividingBy: period) == 0, "whole periods")
+        var total = 0.0, count = 0
+        for y in 200..<312 { for x in x0..<x1 { total += Double(px[(y * side + x) * 4]); count += 1 } }
+        let mean = total / Double(count)
+        var sinSum = 0.0, cosSum = 0.0, chk = 0.0
+        for y in 200..<312 {
+            for x in x0..<x1 {
+                let v = Double(px[(y * side + x) * 4]) - mean
+                sinSum += v * sin(2 * .pi * Double(x) / period)
+                cosSum += v * cos(2 * .pi * Double(x) / period)
+                chk += v * ((x + y) % 2 == 0 ? 1 : -1)
+            }
+        }
+        let n = Double(count)
+        return (mean, 2 * (sinSum * sinSum + cosSum * cosSum).squareRoot() / n, chk / n)
+    }
+
+    /// One "face" over the left half of the frame, nothing cut out of it.
+    static let leftHalf = SkinMask(faces: [SkinMask.Face(
+        box: CGRect(x: 0, y: 0, width: 0.5, height: 1),
+        outline: [CGPoint(x: 0, y: 0), CGPoint(x: 0.5, y: 0), CGPoint(x: 0.5, y: 1), CGPoint(x: 0, y: 1)],
+        features: [])])
+
+    func testTheBandStopTakesTheBlotchAndKeepsTheTexture() {
+        let input = Self.frame()
+        let before = Self.pixels(input)
+        let a0 = Self.amplitudes(before, x0: 40, x1: 200)
+        XCTAssertEqual(a0.blotch, 0.05, accuracy: 0.005, "the premise: a 0.05 blotch")
+        XCTAssertEqual(a0.checker, 0.02, accuracy: 0.002, "and a 0.02 checker")
+
+        let out = Self.pixels(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 1))
+        let a = Self.amplitudes(out, x0: 40, x1: 200)
+        XCTAssertEqual(a.mean, a0.mean, accuracy: 0.005, "the skin's overall tone is kept")
+        XCTAssertLessThan(a.blotch, a0.blotch * 0.35, "the mid-scale blotch is mostly gone (\(a.blotch))")
+        XCTAssertGreaterThan(a.checker, a0.checker * 0.8, "the fine texture is kept (\(a.checker))")
+
+        // Outside the mask, the pixels are the input's.
+        var worst: Float = 0
+        for y in 0..<Self.side { for x in 360..<Self.side {
+            let i = (y * Self.side + x) * 4
+            worst = max(worst, abs(out[i] - before[i]))
+        } }
+        XCTAssertLessThan(worst, 2e-3, "nothing changes outside the skin (half-float working format)")
+        XCTAssertEqual(out[3], 1, accuracy: 1e-3, "alpha stays 1")
+    }
+
+    func testNothingIsDoneAtZeroOrWithoutAFace() {
+        let input = Self.frame()
+        XCTAssertTrue(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 0) === input)
+        XCTAssertTrue(SkinSmoothing.apply(input, mask: .none, strength: 1) === input)
+    }
+
+    func testTheRetouchKeysTheEngineFrameAndThePrint() {
+        var p = FilmParams()
+        XCTAssertNil(p.engineFramingKey, "off: the whole decode, as before")
+        let stampOff = Session.printStamp(p)
+        p.retouch.skinSmoothing = 0.3
+        XCTAssertEqual(p.engineFramingKey, "skin=0.300", "a retouched decode is another frame for the engine")
+        XCTAssertNotEqual(Session.printStamp(p), stampOff, "and another print for the cache")
+        XCTAssertTrue(p.delta(from: FilmParams()).delta.isEmpty, "and nothing on the wire")
+    }
+}
+
 /// Composition: the measurements and the rules that build crops from them.
 @MainActor
 final class CompositionTests: XCTestCase {
@@ -777,6 +883,28 @@ final class AISessionTests: XCTestCase {
         XCTAssertFalse(ws.session.scheduler.pending)
     }
 
+    /// Skin smoothing is an open, not a delta: the strength keys the engine's
+    /// frame, so setting it re-develops (and `settle` sees it through), and
+    /// Undo re-develops back. No face here, so this is the plumbing only —
+    /// the pixels are `SkinTests`' and the opt-in `SkinPhotoTests`'.
+    func testSkinSmoothingReDevelopsTheFrameAndUndoes() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        ws.timeout = 30
+        try await ws.open(url.path)
+        try await ws.develop()
+        let s = ws.session
+        XCTAssertNil(s.engineFraming)
+        _ = try await ws.edit(["params": ["retouch": ["skinSmoothing": 0.3]]])
+        try await ws.settle()
+        XCTAssertEqual(s.engineFraming, "skin=0.300", "the engine holds the retouched frame")
+        XCTAssertTrue(s.printStamp.contains("skin=0.300"), "and the print is stamped with it")
+        s.undo()
+        try await ws.settle()
+        XCTAssertEqual(s.params.retouch.skinSmoothing, 0)
+        XCTAssertNil(s.engineFraming, "Undo re-develops the untouched frame")
+    }
+
     /// Restoring an earlier edit is one step, and Undo takes it back.
     func testRestoringAnEditIsOneUndoableStep() async throws {
         let url = try syntheticFrame()
@@ -952,5 +1080,45 @@ final class AIEndToEndTests: XCTestCase {
             let a = path.reduce(Optional(now)) { $0?[$1] }, b = path.reduce(Optional(then)) { $0?[$1] }
             XCTAssertEqual(a, b, "Undo AI changes puts \(field.path) back")
         }
+    }
+}
+
+
+/// Skin smoothing on a real portrait: faces found, the frame re-developed,
+/// before and after written out. **Opt-in** (`SPK_SKIN_IMAGE`, and
+/// `SPK_SKIN_OUT` for a directory): there is no portrait fixture in this
+/// checkout, and Vision does not find faces in drawn ones.
+@MainActor
+final class SkinPhotoTests: XCTestCase {
+    func testSmoothingARealPortrait() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let source = env["SPK_SKIN_IMAGE"] else { throw XCTSkip("SPK_SKIN_IMAGE is not set") }
+        let out = URL(fileURLWithPath: env["SPK_SKIN_OUT"] ?? NSTemporaryDirectory())
+        let dir = FileManager.default.temporaryDirectory.appending(path: "spk-skin-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: URL(fileURLWithPath: source).lastPathComponent)
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: source), to: url)
+
+        let ws = AgentWorkspace()
+        ws.timeout = 120
+        try await ws.open(url.path)
+        try await ws.process()
+        let s = ws.session
+        let found = await s.refreshSkinMask()
+        let mask = try XCTUnwrap(found)
+        print("SKIN faces:", mask.faces.count, "median width:", mask.faceWidth)
+        XCTAssertFalse(mask.isEmpty, "a portrait has a face Vision finds")
+        if let d = s.decoded, let m = mask.render(width: Int(d.pixelSize.width / 4), height: Int(d.pixelSize.height / 4)) {
+            try? ProofSheet.writeJPEG(m, to: out.appending(path: "skin-mask.jpg"))
+        }
+        let edge = min(4096, Int(s.sourceLongEdge))
+        _ = try await ws.preview(to: out.appending(path: "skin-0.jpg"), longEdge: edge)
+        let strength = Double(env["SPK_SKIN_STRENGTH"] ?? "0.6") ?? 0.6
+        _ = try await ws.edit(["params": ["retouch": ["skinSmoothing": .number(strength)]]])
+        try await ws.settle()
+        XCTAssertNotNil(s.engineFraming)
+        _ = try await ws.preview(to: out.appending(path: "skin-\(Int(strength * 100)).jpg"), longEdge: edge)
+        print("SKIN wrote", out.path)
     }
 }

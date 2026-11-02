@@ -51,6 +51,8 @@ struct RightPanel: View {
             s.append(("camera", AnyView(CameraSection(session: session))))
             s.append(("filmFormat", AnyView(FilmFormatSection(session: session))))
             s.append(("scenePlacement", AnyView(ScenePlacementSection(session: session))))
+            // The one retouch, on the decode before the film (ARCHITECTURE §7.4).
+            s.append(("portrait", AnyView(PortraitSection(session: session))))
             // Withdrawn for the next version (`FeatureFlags.toneMask`).
             if FeatureFlags.toneMask { s.append(("toneMask", AnyView(ToneMaskSection(session: session)))) }
         } else if tab == .ai {

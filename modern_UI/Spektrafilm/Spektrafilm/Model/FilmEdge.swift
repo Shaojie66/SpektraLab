@@ -413,8 +413,13 @@ extension FilmParams {
     /// The framing the engine's frame must have been cut with, or nil for the
     /// whole decode.
     var engineFramingKey: String? {
-        if filmEdge.effective { return filmEdge.framing }
-        return dateBack.cutsFrame(filmEdge: filmEdge) ? dateBack.framing : nil
+        let cut: String?
+        if filmEdge.effective { cut = filmEdge.framing }
+        else { cut = dateBack.cutsFrame(filmEdge: filmEdge) ? dateBack.framing : nil }
+        // A retouched decode is another frame for the engine: a change of
+        // strength is an open, as a change of cut is (`requestPrint`).
+        guard let r = retouch.key else { return cut }
+        return (cut.map { $0 + ";" } ?? "") + r
     }
 
     /// `film_format_mm` as sent. The engine takes it as the long edge of the

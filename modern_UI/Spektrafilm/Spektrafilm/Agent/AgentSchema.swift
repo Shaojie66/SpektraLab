@@ -132,6 +132,8 @@ enum AgentSchema {
             .init("params.effects.couplersActive", .bool, "DIR couplers."),
             .init("params.effects.couplers", .number(EffectStrengths.couplersRange), "DIR coupler strength."),
             .init("params.effects.glare", .number(EffectStrengths.glareRange), "Glare strength, × the paper's own."),
+            .init("params.retouch.skinSmoothing", .number(RetouchSettings.skinRange),
+                  "Skin smoothing, 0 off to 1 most, on the faces Vision finds, done before the film so the grain stays on the skin. Re-develops the frame."),
         ]
         // RFC-032's film edge and RFC-031's date back (API-SPEC §13). Shoot
         // layer: every edit re-develops. What the session resolves for the

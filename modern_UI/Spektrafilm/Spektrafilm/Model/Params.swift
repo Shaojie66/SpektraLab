@@ -472,6 +472,7 @@ struct FilmParams: Codable, Equatable, Sendable {
         case extendedDynamicRange, preflashExposure, contrastMask, sceneLatitude, effects, printEffects
         case digitalIntermediate, filmEdge, dateBack
         case sceneLatitudeOther, placementIsRight, pairSplit
+        case retouch
     }
 
     // --- stock (shoot for film, print for paper) ---
@@ -659,6 +660,10 @@ struct FilmParams: Codable, Equatable, Sendable {
     /// layer: both are exposure on the negative.
     var filmEdge = FilmEdgeSettings()
     var dateBack = DateBackSettings()
+    /// Skin smoothing, done to the decode **before** the engine (ARCHITECTURE
+    /// §7.4, §7.14). Off the wire: the engine never hears of it; it decides
+    /// what frame the engine is handed, through `engineFramingKey`.
+    var retouch = RetouchSettings()
 
     init() {
         filmStock = "kodak_portra_400"
@@ -687,6 +692,7 @@ struct FilmParams: Codable, Equatable, Sendable {
         printEffects = true
         filmEdge = FilmEdgeSettings()
         dateBack = DateBackSettings()
+        retouch = RetouchSettings()
     }
 
     /// Keep sidecars written before EDR readable. Stored properties with
@@ -729,6 +735,7 @@ struct FilmParams: Codable, Equatable, Sendable {
         printEffects = try c.decodeIfPresent(Bool.self, forKey: .printEffects) ?? true
         filmEdge = try c.decodeIfPresent(FilmEdgeSettings.self, forKey: .filmEdge) ?? FilmEdgeSettings()
         dateBack = try c.decodeIfPresent(DateBackSettings.self, forKey: .dateBack) ?? DateBackSettings()
+        retouch = try c.decodeIfPresent(RetouchSettings.self, forKey: .retouch) ?? RetouchSettings()
     }
 
     static let `default` = FilmParams()
@@ -876,4 +883,29 @@ struct FilmParams: Codable, Equatable, Sendable {
     /// the engine adds them to a pack of about 55 / 65 CC, so sent bare the
     /// whole slider was one CC: a twentieth of a stop, which nobody can see.
     static let filterShiftCC: Double = 40
+}
+
+/// Retouching done to the photograph before it is exposed onto film (this
+/// fork; ARCHITECTURE §7.4). Only skin, only smoothing.
+struct RetouchSettings: Codable, Equatable, Sendable {
+    /// 0 is off, 1 is the most the band-stop removes (`SkinSmoothing`).
+    var skinSmoothing: Double = 0
+
+    static let skinRange: ClosedRange<Double> = 0...1
+
+    var isActive: Bool { skinSmoothing > 0 }
+
+    /// What the engine's frame carries of this, for the framing key and the
+    /// print stamp: nil when nothing is retouched, so every frame without it
+    /// keys and stamps exactly as before.
+    var key: String? {
+        isActive ? String(format: "skin=%.3f", skinSmoothing) : nil
+    }
+
+    init(skinSmoothing: Double = 0) { self.skinSmoothing = skinSmoothing }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        skinSmoothing = try c.decodeIfPresent(Double.self, forKey: .skinSmoothing) ?? 0
+    }
+    private enum CodingKeys: String, CodingKey { case skinSmoothing }
 }

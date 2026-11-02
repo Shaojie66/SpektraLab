@@ -75,6 +75,9 @@ enum ClipboardGroup: String, CaseIterable, Codable, Sendable, Identifiable {
         // seeds and the resolved text would be the source photograph's anyway.
         "params.filmEdge": "Film Edge: not copied until a group is decided (F10)",
         "params.dateBack": "Date Back: not copied until a group is decided (F10)",
+        // The faces are this photograph's: another frame may have none, or
+        // people who want no smoothing at all.
+        "params.retouch": "skin smoothing belongs to the faces in this photograph",
         // A half-frame pair's second placement and which frame is which: they
         // belong to the piece's two frames, and a frame has neither.
         "params.sceneLatitudeOther": "a half-frame pair's other frame's placement",

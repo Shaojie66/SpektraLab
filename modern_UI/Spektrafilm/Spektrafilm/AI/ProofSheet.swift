@@ -178,8 +178,12 @@ enum ProofSheet {
         guard session.pair == nil else { throw Failure.pair }
         let device = session.renderer.device
         let geometry = wholeFrame ? Geometry.default : session.geometry
+        // The proof is of the frame as it will print: retouched if it is.
+        let retouch = session.params.retouch
+        let skin = retouch.isActive ? await session.skinMask(for: decoded, url: session.selection!) : .none
         let frame = try await Task.detached(priority: .userInitiated) {
-            var image = Session.engineImage(decoded.linear, size: decoded.pixelSize,
+            let source = SkinSmoothing.apply(decoded.linear, mask: skin, strength: retouch.skinSmoothing)
+            var image = Session.engineImage(source, size: decoded.pixelSize,
                                             cut: geometry.isIdentity ? nil : geometry)
             let long = max(image.extent.width, image.extent.height)
             if long > CGFloat(longEdge) {

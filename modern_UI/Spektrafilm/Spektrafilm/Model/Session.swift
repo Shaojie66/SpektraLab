@@ -379,6 +379,9 @@ final class Session: CanvasHost {
     /// real render long before a 2 MP one does.
     private(set) var sourceLongEdge: CGFloat = 0
     private(set) var exif: EXIFReadout?
+    /// The skin found in the open frame's decode (`Session+Skin.swift`):
+    /// which frame and decode it was found in, and what was found.
+    var skinMaskState: (url: URL, key: String, mask: SkinMask)?
 
     // MARK: ui state
     //
@@ -2400,8 +2403,14 @@ final class Session: CanvasHost {
                 guard selection == url, !Task.isCancelled else { return nil }
                 let cut = filmEdgeCut
                 framing = wantedEngineFraming
+                // The one retouch, before the film (ARCHITECTURE §7.4): the
+                // decode is smoothed where the skin is, then cut and handed on.
+                let retouch = sidecar.params.retouch
+                let skin = retouch.isActive && pair == nil ? await skinMask(for: d, url: url) : .none
+                guard selection == url, !Task.isCancelled else { return nil }
                 let frame = try await Task.detached(priority: .userInitiated) {
-                    var image = Session.engineImage(d.linear, size: d.pixelSize, cut: cut)
+                    let source = SkinSmoothing.apply(d.linear, mask: skin, strength: retouch.skinSmoothing)
+                    var image = Session.engineImage(source, size: d.pixelSize, cut: cut)
                     if let stops, let layout { image = PairComposer.exposed(image, layout: layout, stops: stops) }
                     return try ImageDecoder.engineFrame(from: image, device: device)
                 }.value
@@ -3620,7 +3629,9 @@ final class Session: CanvasHost {
     /// still the truth is a question about *data* rather than about which
     /// callback happened to run last.
     nonisolated static func printStamp(_ p: FilmParams) -> String {
-        let stamp = p.wire.map { "\($0.name)=\($0.value)" }.joined(separator: ";")
+        var stamp = p.wire.map { "\($0.name)=\($0.value)" }.joined(separator: ";")
+        // The retouched decode is off the wire but in the picture.
+        if let r = p.retouch.key { stamp += ";" + r }
         // With a film edge the crop is in the negative (`Session+FilmEdge`),
         // so the print is a different picture for every framing. Off, the
         // stamp is exactly what it always was.
