@@ -85,7 +85,7 @@ the pointer. A pair is one item in the filmstrip and exports as one picture.
 Drag a thumbnail along the filmstrip to reorder a folder; the order is kept for
 that folder. A file dropped from Finder still opens and edits.
 
-## AI film choice, composition and refinement (this fork)
+## AI film choice, composition, skin smoothing and refinement (this fork)
 
 The Parameters rail has an **AI** tab. It is off by default: turn it on in
 **Settings ▸ AI**, choose a provider and enter its API key. For an
@@ -131,14 +131,34 @@ plan, keeping your earlier 90° turns and flips; **Undo AI changes** restores it
 step. Not available with Film Edge on or in half-frame pairs. Local Ollama (for example
 `gemma4:26b`) and Claude both work.
 
+**Skin smoothing** is in the Pre-Dev tab, under **Portrait**: a 0–100 slider,
+0 (off) by default, applied when you release it. It needs no API key. Where the Mac's Vision framework finds no
+face the slider is disabled and says why; undo works as usual. Face landmarks are
+detected locally, free and with no network. The mask covers the face outline with
+the forehead added, cuts out the eyes, brows, lips and nose so the features stay
+sharp, and is pulled in and feathered at the edge, leaving the hairline and
+background alone. Neck and body skin are not touched. It removes mid-scale blotches
+and unevenness while keeping the finer pore texture and the coarser light and shade of
+the face. The scale follows the size of the face, so the same strength means the same
+thing in a close-up and in a group shot. The smoothing happens
+before the film: the raw decode is retouched, then handed to the engine, so grain,
+halation and the paper curve still fall on the skin and the face does not become a
+smooth plastic patch in a grained picture. This is the one retouching exception in
+this fork; nothing else is edited after the print. Changing the strength re-prints
+the photo, about 1–2 seconds for a large image. **Refine** may also set it, only when
+a face is present: usually 0.2–0.4 for a natural portrait, and none when people are
+small or only background. In a test, local `gemma4:26b` set 0.3 for the intent
+"natural portrait skin". Copy and paste settings does not copy it, since every
+photo has different faces. Half-frame pairs are not yet supported.
+
 **Refine** gives the model a 1024 px view of the print and up to three rounds
 to adjust metering, Film Exposure, paper brightness, enlarger Y/M filters, pre-flash,
 grain, halation, Scene Placement and Post-Dev grading. It cannot change film,
 paper, crop, Film Edge, Date Back or decode; out-of-scope or out-of-range
 changes are refused and reported back to the model. **Undo AI changes** restores
 the edit from before AI in one step; ⌘Z can undo that restoration. This is not
-generative retouching: it changes existing controls, not pixels or the film
-model, and the result is saved in the ordinary sidecar. Half-frame pairs are
+generative retouching: it changes existing controls, not the film
+model or the print's pixels, and the result is saved in the ordinary sidecar. Half-frame pairs are
 not yet supported.
 
 Photos are sent only when **Recommend**, **Recommend crops** or **Refine** is pressed, along with
