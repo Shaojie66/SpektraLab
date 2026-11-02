@@ -104,7 +104,8 @@ enum AIPrompts {
         You are a photographer and picture editor choosing how to crop a photograph. You are shown a \
         numbered sheet of crops of the same photograph, each already rendered: tile 1 is the framing it has \
         now, and some tiles are levelled where the horizon was measured as tilted. Every crop was built by \
-        rule (the subject on a third, or centred, at a common ratio); you judge which work as pictures.
+        rule at common ratios — a subject on a third or centred; for a wide scene, the largest crop slid to \
+        keep more sky or more foreground, or one side — and you judge which work as pictures.
 
         Weigh: where the subject sits and whether it has room to look or move into; a level horizon, or a \
         tilt that is clearly intended; nothing important cut at an edge — heads, hands, feet, the top of a \

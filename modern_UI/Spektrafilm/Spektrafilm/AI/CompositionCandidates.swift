@@ -3,9 +3,11 @@
 //
 //  Pure: a frame size, the current geometry and a `CompositionAnalysis` in, a
 //  short list of `Geometry`s out, each one that `Geometry.fits` and that
-//  `AgentDocument.validate` will take. The rules are the ordinary ones — the
-//  subject on a third, or centred for symmetry, at a few common ratios in the
-//  picture's own orientation, levelled when the horizon is tilted — and the
+//  `AgentDocument.validate` will take. The rules are the ordinary ones — a
+//  subject on a third, or centred for symmetry; a scene (a salient region over
+//  `sceneArea`) as the largest crop slid to keep its top or bottom, or a side —
+//  at a few common ratios in the picture's own orientation, levelled when the
+//  horizon is tilted — and the
 //  list always starts with the framing the frame has now, so "leave it" is one
 //  of the answers. Which of them is best is the model's call, made on the
 //  rendered crops.
