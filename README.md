@@ -6,7 +6,7 @@ A film and print simulator for macOS. Open a RAW, pick a film and a paper,
 and get a physically modelled print — grain, halation, couplers, the enlarger's
 filter pack — in about a second.
 
-![SpektraLab: Lower Manhattan on Kodak Portra 160, printed on Kodak Vision 2383](screenshots/Screenshot_English.png)
+![SpektraLab: autumn trees on Kodak Portra 400, printed on Kodak Professional Supra Endura](screenshots/Screenshot_English.png)
 
 - **Spectral, not a LUT.** Light is traced through 81 wavelengths, the film's
   dye layers and the paper's, the way a darkroom does it.
