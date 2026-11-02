@@ -144,9 +144,9 @@ faces are looked for on the whole picture and on overlapping tiles of it, and ea
 face's landmarks are then read on its own enlarged crop: in tests, 19 faces in a group
 of about 25 people (7 when looking at the whole picture only) and 8 in a group of 10
 (6). Faces mostly hidden behind someone, or turned far away, are not found. A face that is
-found but whose features (eyes, brows, lips, nose) cannot be read, because it is too small or
-turned too far, is left unsmoothed, and the line under the Portrait slider says how many, e.g.
-"19 faces · 1 more too small or turned, left as they are". When even the largest face is under
+found but whose features (eyes, brows, lips, nose) cannot be read, because it is too small,
+turned too far or covered, is left unsmoothed, and the line under the Portrait slider says how many, e.g.
+"19 faces · 1 more with features that cannot be read, left as they are". When even the largest face is under
 5% of the photo's long edge (a group of about 25 people at 1440 px, largest face 3.4%), the line
 adds "all small, so it barely shows". AI Refine is given the same two facts. The mask
 covers the face outline with

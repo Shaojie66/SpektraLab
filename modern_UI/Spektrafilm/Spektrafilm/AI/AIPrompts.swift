@@ -296,7 +296,7 @@ enum AIPrompts {
             } else {
                 var line = "\(faces.faces.count) face(s) found, so skin smoothing applies to them."
                 if faces.missed > 0 {
-                    line += " \(faces.missed) more were too small or turned to smooth, so it would treat people unevenly."
+                    line += " \(faces.missed) more had features that could not be read (too small, turned or covered), so it would treat people unevenly."
                 }
                 if faces.facesAreSmall {
                     line += String(format: " All are small (the largest is %.0f%% of the long edge): it barely shows; leave it at 0 unless asked.",

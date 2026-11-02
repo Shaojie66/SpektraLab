@@ -72,13 +72,14 @@ struct PortraitSection: View {
         let n = mask.faces.count
         if n == 0 {
             return mask.missed > 0
-                ? L("\(mask.missed) face(s) too small or turned to smooth", zh: "有 \(mask.missed) 张脸太小或太偏，无法磨皮")
+                ? L("\(mask.missed) face(s) whose features cannot be read (too small, turned or covered)",
+                    zh: "有 \(mask.missed) 张脸看不清五官（太小、太偏或被遮挡），无法磨皮")
                 : L("No face found", zh: "没有检测到人脸")
         }
         var en = n == 1 ? "1 face" : "\(n) faces", zh = "检测到 \(n) 张人脸"
         if mask.missed > 0 {
-            en += " · \(mask.missed) more too small or turned, left as they are"
-            zh += " · 另有 \(mask.missed) 张太小或太偏，不处理"
+            en += " · \(mask.missed) more with features that cannot be read, left as they are"
+            zh += " · 另有 \(mask.missed) 张看不清五官，不处理"
         }
         if mask.facesAreSmall {
             en += " · all small, so it barely shows"

@@ -241,7 +241,7 @@ final class AIUnitTests: XCTestCase {
         XCTAssertFalse(two.contains("unevenly"))
         XCTAssertFalse(two.contains("barely shows"))
         let crowd = told(SkinMask(faces: [SkinTests.face(0.2, 0.3, 0.03, 0.04)], missed: 4, aspect: 4.0 / 3))
-        XCTAssertTrue(crowd.contains("4 more were too small or turned"), crowd)
+        XCTAssertTrue(crowd.contains("4 more had features that could not be read"), crowd)
         XCTAssertTrue(crowd.contains("All are small (the largest is 3% of the long edge)"), crowd)
         let bare = AIPrompts.refinerUser(document: ["params": [:], "adjustments": [:]], latitude: nil, film: nil, exif: nil,
                                          intent: "", history: [], feedback: nil, round: 1, of: 3,

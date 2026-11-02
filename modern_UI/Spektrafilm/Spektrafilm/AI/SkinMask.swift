@@ -24,8 +24,9 @@ struct SkinMask: Sendable {
     }
 
     let faces: [Face]
-    /// Faces whose box was found but whose landmarks were not — too small or
-    /// turned too far: people the smoothing leaves as they are.
+    /// Faces whose box was found but whose landmarks were not — too small,
+    /// turned too far, or covered (a selfie through a scratched mirror):
+    /// people the smoothing leaves as they are.
     var missed = 0
     /// The searched picture's width over its height.
     var aspect = 1.0
