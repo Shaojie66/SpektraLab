@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=f2aa1b9; updated=2026-11-02 -->
+<!-- README_SYNC: source=a92ed78; updated=2026-11-02 -->
 **English** · [简体中文](README.zh-CN.md)
 
 # spektralab-ai
@@ -120,8 +120,10 @@ merged there as
 [#54](https://github.com/JamesQiu2005/SpektraLab/pull/54). Windows and
 Linux work belongs to upstream's `Windows_Linux` branch.
 
-Pull requests about the AI features are welcome here: one change per
-commit, with a message that says what it does and why.
+Bugs and ideas about the AI features go to
+[Issues](https://github.com/Shaojie66/spektralab-ai/issues); pull requests are
+welcome too: one change per commit, with a message that says what it does and
+why.
 
 ## Credits and licence
 
@@ -159,5 +161,6 @@ This repository is a personal fork, publishes no builds, and is not official.
 ---
 
 ⭐ [Star](https://github.com/Shaojie66/spektralab-ai/stargazers) if it helps ·
-[Open a pull request](https://github.com/Shaojie66/spektralab-ai/pulls) for a
-fix or an improvement to the AI features.
+[Open an issue](https://github.com/Shaojie66/spektralab-ai/issues) for a bug or
+an idea · [pull requests](https://github.com/Shaojie66/spektralab-ai/pulls)
+welcome.

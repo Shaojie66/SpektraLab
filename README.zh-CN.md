@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=f2aa1b9; updated=2026-11-02 -->
+<!-- README_SYNC: source=a92ed78; updated=2026-11-02 -->
 [English](README.md) · **简体中文**
 
 # spektralab-ai
@@ -107,7 +107,8 @@ AI 功能曾向上游提交过，现在在这里维护。对 SpektraLab 本身�
 在这里发现的 sidecar 监视器问题，修复已作为 [#54](https://github.com/JamesQiu2005/SpektraLab/pull/54) 合并进上游。
 Windows 和 Linux 相关的工作属于上游的 `Windows_Linux` 分支。
 
-欢迎就 AI 功能提交 Pull Request：一个提交只做一件事，提交说明写清做了什么、为什么。
+AI 功能的问题和想法请提到 [Issues](https://github.com/Shaojie66/spektralab-ai/issues)；
+也欢迎提交 Pull Request：一个提交只做一件事，提交说明写清做了什么、为什么。
 
 ## 致谢与许可
 
@@ -137,4 +138,5 @@ Windows 和 Linux 相关的工作属于上游的 `Windows_Linux` 分支。
 ---
 
 ⭐ [Star](https://github.com/Shaojie66/spektralab-ai/stargazers) 一下方便回来 ·
-有 AI 功能的修复或改进，欢迎 [提交 Pull Request](https://github.com/Shaojie66/spektralab-ai/pulls)。
+遇到问题或有想法，[提 Issue](https://github.com/Shaojie66/spektralab-ai/issues) ·
+也欢迎 [Pull Request](https://github.com/Shaojie66/spektralab-ai/pulls)。
