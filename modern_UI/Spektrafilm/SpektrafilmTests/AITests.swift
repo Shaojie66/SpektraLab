@@ -706,6 +706,47 @@ final class SkinTests: XCTestCase {
         XCTAssertLessThan(far.blotch, 0.05 * 0.12, "the blotch beside it still goes (\(far.blotch))")
     }
 
+    /// The band takes swings of the skin's own scale whatever their size;
+    /// a nose's ridge and the shading beside it are that scale too. Cut out
+    /// whole, a nose kept all its texture beside smoothed cheeks and read as
+    /// pasted on; smoothed as skin, its shading broke into patches. A swing
+    /// far larger than a blotch is the face's shape and is kept; a blotch
+    /// beside it still goes.
+    func testTheFacesShapeIsKeptWhereABlotchGoes() {
+        let n = Self.side
+        // A ridge twice the skin's brightness, 10 px (σ, 2 % of the face)
+        // wide, down the middle: its swing in the band is about half the
+        // skin's level, where a real nose's ridge and sides measured 0.43–0.68
+        // (median) on two selfies, and their cheeks 0.07–0.21. Blotches on
+        // the left.
+        var px = [Float](repeating: 0, count: n * n * 4)
+        for y in 0..<n {
+            for x in 0..<n {
+                let ridge = 0.3 * exp(-pow(Double(x - 300), 2) / (2 * 10 * 10))
+                let blotch = x < 200 ? 0.05 * sin(2 * .pi * Double(x) / Self.period) : 0
+                let checker = (x + y) % 2 == 0 ? 0.02 : -0.02
+                let v = Float(0.3 + ridge + blotch + checker)
+                let i = (y * n + x) * 4
+                px[i] = v; px[i + 1] = v; px[i + 2] = v; px[i + 3] = 1
+            }
+        }
+        let input = CIImage(bitmapData: px.withUnsafeBufferPointer { Data(buffer: $0) }, bytesPerRow: n * 16,
+                            size: CGSize(width: n, height: n), format: .RGBAf, colorSpace: Self.space)
+        let whole = SkinMask(faces: [SkinMask.Face(
+            box: CGRect(x: 0, y: 0, width: 1, height: 1),
+            outline: [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)],
+            features: [])])
+        let out = Self.pixels(SkinSmoothing.apply(input, mask: whole, strength: 1, soft: 1))
+        func row(_ px: [Float], _ x: Int) -> Double {
+            var t = 0.0; for y in 200..<312 { t += Double(px[(y * n + x) * 4]) }; return t / 112
+        }
+        let height = row(out, 300) - row(out, 360)              // the ridge's top against the skin beside it
+        let was = row(px, 300) - row(px, 360)
+        XCTAssertGreaterThan(height, was * 0.8, "the ridge keeps its shape (\(height) of \(was))")
+        let blotch = Self.amplitudes(out, x0: 40, x1: 160).blotch
+        XCTAssertLessThan(blotch, 0.05 * 0.3, "the blotch beside it still goes (\(blotch))")
+    }
+
     func testNothingIsDoneAtZeroOrWithoutAFace() {
         let input = Self.frame()
         XCTAssertTrue(SkinSmoothing.apply(input, mask: Self.leftHalf, strength: 0) === input)

@@ -93,7 +93,19 @@ enum SkinSmoothing {
             let weight = multiply(skin, objects.clampedToExtent())
             let b1 = weightedBlur(base, weight: weight, sigma: sigma1, region: region)
             let b2 = weightedBlur(base, weight: weight, sigma: sigma2, region: region)
-            var band = add(b2, multiply(b1, constant(-1, over: region)))             // b2 − b1
+            // b2 − b1, and of it only the swings the size of a blotch: what is
+            // far larger is the face's shape (a nose's ridge, its shading).
+            let raw = add(b2, multiply(b1, constant(-1, over: region)))
+            // The guard decided over a neighbourhood, half the band's reach:
+            // per pixel, stubble and a lip's shadow put its ramp in and out
+            // of a patch and drew the patch's edge. What it keeps is spread
+            // first, then softened, so the softening falls outside the shape
+            // and not across it (softened alone, a ridge kept half its height).
+            let reach = sigma2 * 0.5
+            let shape = shapeGuard(raw, level: b2, region: region).clampedToExtent()
+                .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: reach])
+                .applyingGaussianBlur(sigma: reach).cropped(to: region)
+            var band = multiply(raw, shape)
             if soft > 0 {
                 // + softness × share × (b1 − img): the fine texture, softened too.
                 let fine = add(b1, multiply(base.cropped(to: region), constant(-1, over: region)))
@@ -201,6 +213,36 @@ enum SkinSmoothing {
         let dark = ramp(1 / darkWidth, -(objectDark - darkWidth) / darkWidth)        // 0 at dark − width, 1 at dark
         let light = ramp(-1 / lightWidth, (objectLight + lightWidth) / lightWidth)  // 1 at light, 0 at light + width
         return multiply(dark, light).cropped(to: region)
+    }
+
+    /// Between these shares of the skin's own level, a swing of the band
+    /// goes from removed whole to kept whole. A blotch or a red mark is within
+    /// 10–20 % of it (cheeks measured 0.07–0.21, median); a nose's ridge, the shading beside it and the creases of
+    /// its wings are 30 % and more. A ramp in the swing's size, not a line in
+    /// the picture: nothing it does has an edge of its own.
+    static let shapeFrom = 0.15
+    static let shapeTo = 0.5
+
+    /// 1 where the band's swing is a blotch's, falling to 0 where it is the
+    /// face's shape (`shapeFrom`, `shapeTo`). Opaque grey.
+    static func shapeGuard(_ band: CIImage, level: CIImage, region: CGRect) -> CIImage {
+        // Alpha back to 1 first: the band is component arithmetic, and the
+        // colour matrix in `luminance` unpremultiplies.
+        let l = luminance(band.settingAlphaOne(in: region))
+        let size = CIBlendKernel.componentMax.apply(foreground: multiply(l, constant(-1, over: region)), background: l) ?? l
+        let share = multiply(size, reciprocal(luminance(level.settingAlphaOne(in: region)), floor: 0.005, over: region))
+            .settingAlphaOne(in: region)
+        let width = shapeTo - shapeFrom
+        return share.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: -1 / width, y: 0, z: 0, w: 0),
+            "inputGVector": CIVector(x: -1 / width, y: 0, z: 0, w: 0),
+            "inputBVector": CIVector(x: -1 / width, y: 0, z: 0, w: 0),
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputBiasVector": CIVector(x: shapeTo / width, y: shapeTo / width, z: shapeTo / width, w: 1),
+        ]).applyingFilter("CIColorClamp", parameters: [
+            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 1),
+            "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
+        ]).cropped(to: region)
     }
 
     /// Rec. 709 luminance in every channel, alpha 1.

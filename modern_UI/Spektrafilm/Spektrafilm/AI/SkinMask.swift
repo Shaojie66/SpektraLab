@@ -2,7 +2,7 @@
 //
 //  Vision's face boxes, then landmarks, on a render of the decode: for each face the
 //  jaw line and brows give the face's outline, raised over the forehead; the
-//  eyes, brows, lips and nose are cut out of it so they stay sharp; the edge
+//  eyes, brows and lips are cut out of it so they stay sharp; the edge
 //  is pulled in and feathered so the hairline and the background are left
 //  alone. No network, no model. Coordinates stay Vision's — normalised,
 //  bottom-left origin — which is also Core Image's, so the mask lands on the
@@ -19,7 +19,7 @@ struct SkinMask: Sendable {
         let box: CGRect
         /// The skin's outline: jaw, then the forehead over the brows.
         let outline: [CGPoint]
-        /// Eyes, brows, lips, nose: kept out of the mask.
+        /// Eyes, brows, lips: kept out of the mask.
         let features: [[CGPoint]]
     }
 
@@ -158,7 +158,10 @@ struct SkinMask: Sendable {
             .map { CGPoint(x: $0.x, y: $0.y + lift) }
             .sorted { $0.x > $1.x }
         let jawLeftToRight = jaw.first!.x <= jaw.last!.x ? jaw : jaw.reversed()
-        let features = [l.leftEye, l.rightEye, l.leftEyebrow, l.rightEyebrow, l.outerLips, l.nose]
+        // Not the nose: cut out whole it kept all its texture beside smoothed
+        // cheeks and read as pasted on at full strength. Its skin is skin, and
+        // its shape is kept by `SkinSmoothing.shapeGuard`.
+        let features = [l.leftEye, l.rightEye, l.leftEyebrow, l.rightEyebrow, l.outerLips]
             .map(points).filter { $0.count >= 3 }
         return Face(box: faceBox, outline: jawLeftToRight + brows, features: features)
     }
