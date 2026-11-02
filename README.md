@@ -157,7 +157,11 @@ and unevenness while keeping the coarser light and shade of the face, and by def
 the finer pore texture too. The scale is worked out from each face's own size, so a
 small face at the back of a group shot is not over-smoothed. Strong lines (glasses frames, strands of hair) and the pixels beside
 them are protected from softening; fine texture such as pores is not affected by that
-protection. The higher the strength, the larger the scale of blotch it removes: at 100,
+protection. Anything on the skin much darker or lighter than the skin around it (under
+about a third of its brightness, or nearly twice as bright) is treated as an object, not a
+blotch, and is left as it is: the nose pads of glasses stay solid, a lens's glare stays, and a
+very dark mole is kept. Ordinary blotches, acne marks and redness, which differ from the
+surrounding skin by only 10–20 %, are smoothed. The higher the strength, the larger the scale of blotch it removes: at 100,
 about 93 % of a medium blotch is removed, while the face's own
 light and shade is still kept. Suggested use: 30–60 for small faces in a group
 shot, up to 100 for a close-up. **Soft skin**, a switch under the slider in the
