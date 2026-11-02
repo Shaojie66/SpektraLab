@@ -23,6 +23,7 @@ final class AIAssistant {
     enum Phase: Equatable {
         case idle
         case metering
+        case analysing
         case proofing(done: Int, total: Int)
         case asking
         case refining(round: Int, of: Int)
@@ -69,6 +70,22 @@ final class AIAssistant {
         let byAI: Bool
     }
     var exposureChoice: ExposureChoice?
+
+    struct CompositionPick: Identifiable {
+        let index: Int
+        let candidate: CompositionCandidate
+        let score: Int
+        let reason: String
+        let thumbnail: CGImage
+        var id: Int { index }
+    }
+    struct CompositionRecommendation {
+        let url: URL
+        let summary: String
+        let picks: [CompositionPick]
+        let compared: Int
+    }
+    var composition: CompositionRecommendation?
     var steps: [Step] = []
     var error: String?
     private(set) var before: (url: URL, sidecar: Sidecar)?
@@ -80,6 +97,8 @@ final class AIAssistant {
     /// Proofs for a recommendation are smaller than the CLI's: they are
     /// shown as 300 px tiles.
     static let proofLongEdge = 512
+    /// The whole-frame proof composition is measured and cropped from.
+    static let compositionLongEdge = 1024
 
     init(session: Session) {
         self.session = session
@@ -178,6 +197,94 @@ final class AIAssistant {
             _ = try session.applyAgentEdit(["params": ["autoExposure": true, "autoExposureMethod": .string(meter.rawValue)]])
         }
         exposureChoice = ExposureChoice(url: url, meter: .metered(meter), reason: reason, byAI: true)
+    }
+
+    // MARK: composing
+
+    enum CompositionRefusal: Error, CustomStringConvertible {
+        case filmEdge
+        var description: String {
+            "Composition is not offered while Film Edge is on: the gate holds the crop's ratio."
+        }
+    }
+
+    /// Crops of this frame built from what Vision measured in it, rendered on
+    /// one sheet, and the model's three best. See `CompositionCandidates`.
+    func recommendComposition() {
+        start { [self] in
+            let client = try makeClient()
+            guard let url = session.selection else { throw ProofSheet.Failure.nothingOpen }
+            guard session.pair == nil else { throw ProofSheet.Failure.pair }
+            guard !session.params.filmEdge.active else { throw CompositionRefusal.filmEdge }
+            phase = .analysing
+            let p = session.params
+            let catalog = session.catalog
+            guard let base = ProofSheet.candidate(film: p.filmStock, paper: p.scanFilm ? nil : p.printStock, catalog: catalog)
+                    ?? ProofSheet.candidate(film: FilmParams.default.filmStock, paper: nil, catalog: catalog, declared: true)
+            else { throw ProofSheet.Failure.nothingOpen }
+            // The whole frame, so the measurements are in the crop's own coordinates.
+            let proofs = try await ProofSheet.render(session: session, candidates: [base],
+                                                     longEdge: Self.compositionLongEdge, wholeFrame: true)
+            guard let proof = proofs.first?.image else { throw ProofSheet.Failure.noPixels(base.film) }
+            let analysis = try await Task.detached(priority: .userInitiated) { try CompositionAnalysis.analyse(proof) }.value
+            try Task.checkCancellation()
+            let candidates = CompositionCandidates.make(current: session.geometry, analysis: analysis,
+                                                        imageSize: CGSize(width: proof.width, height: proof.height))
+            var tiles: [ProofSheet.Tile] = []
+            for (i, c) in candidates.enumerated() {
+                guard let image = CompositionCandidates.render(c.geometry, from: proof, longEdge: 400)
+                else { throw ProofSheet.Failure.noPixels("crop \(i + 1)") }
+                let area = Int((c.geometry.crop.width * c.geometry.crop.height * 100).rounded())
+                tiles.append(ProofSheet.Tile(image: image,
+                                             title: "\(i + 1)  \(c.kind == .current ? "current" : c.label)",
+                                             subtitle: c.straightened ? String(format: "levelled %+.1f°", c.geometry.angle)
+                                                                      : "\(area)% of frame"))
+            }
+            guard let sheet = ProofSheet.sheet(tiles), let jpeg = Self.jpeg(sheet) else {
+                throw ProofSheet.Failure.noPixels("composition sheet")
+            }
+            phase = .asking
+            let answer = try await client.complete(AIRequest(
+                system: AIPrompts.compositionSystem,
+                parts: [.jpeg(jpeg), .text(AIPrompts.compositionUser(candidates: candidates, analysis: analysis,
+                                                                     exif: session.exif, intent: intent))],
+                schema: AIPrompts.chooserSchema))
+            try Task.checkCancellation()
+            let (summary, ranked) = try AIPrompts.readRanking(answer, count: candidates.count)
+            let picks = ranked.prefix(3).map { r in
+                CompositionPick(index: r.index, candidate: candidates[r.index - 1], score: r.score,
+                                reason: r.reason, thumbnail: tiles[r.index - 1].image)
+            }
+            guard session.selection == url else { return }
+            composition = CompositionRecommendation(url: url, summary: summary, picks: Array(picks),
+                                                    compared: candidates.count)
+        }
+    }
+
+    /// The crop's own rectangle, angle and ratio through `applyAgentEdit`,
+    /// which fits it in the frame as a person's crop is fitted. Turns and
+    /// flips are the person's and are not touched.
+    func applyComposition(_ pick: CompositionPick) {
+        guard !busy, !session.batchExporting, session.selection != nil else { return }
+        let g = pick.candidate.geometry
+        remember()
+        do {
+            _ = try session.applyAgentEdit(["geometry": [
+                "crop": ["x": .number(Double(g.crop.x)), "y": .number(Double(g.crop.y)),
+                         "width": .number(Double(g.crop.width)), "height": .number(Double(g.crop.height))],
+                "angle": .number(g.angle),
+                "aspect": .string(g.aspect.rawValue),
+            ]])
+        } catch {
+            self.error = "\(error)"
+        }
+    }
+
+    /// Whether the frame is framed as `pick` frames it.
+    func isCurrent(_ pick: CompositionPick) -> Bool {
+        let a = session.geometry, b = pick.candidate.geometry
+        return abs(a.angle - b.angle) < 0.05 && abs(a.crop.x - b.crop.x) < 0.002 && abs(a.crop.y - b.crop.y) < 0.002
+            && abs(a.crop.width - b.crop.width) < 0.002 && abs(a.crop.height - b.crop.height) < 0.002
     }
 
     /// The film list's rule, then Solve — what choosing it by hand and

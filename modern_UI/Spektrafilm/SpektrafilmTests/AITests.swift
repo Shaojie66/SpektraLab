@@ -311,6 +311,149 @@ final class AIUnitTests: XCTestCase {
     }
 }
 
+/// Composition: the measurements and the rules that build crops from them.
+@MainActor
+final class CompositionTests: XCTestCase {
+
+    /// Sky over ground, the boundary through the centre tilted `degrees`
+    /// clockwise (y down: descending to the right).
+    static func horizon(tilted degrees: Double, size: CGSize = CGSize(width: 1200, height: 800)) -> CGImage {
+        let w = Int(size.width), h = Int(size.height)
+        let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+        // Core Graphics is y up: draw the ground as the polygon under the line.
+        ctx.setFillColor(CGColor(srgbRed: 0.55, green: 0.75, blue: 0.95, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        let t = tan(degrees * .pi / 180)
+        let cx = Double(w) / 2, cy = Double(h) / 2
+        func yUp(_ x: Double) -> Double { Double(h) - (cy + (x - cx) * t) }   // y-down line, flipped
+        ctx.setFillColor(CGColor(srgbRed: 0.25, green: 0.35, blue: 0.15, alpha: 1))
+        ctx.beginPath()
+        ctx.move(to: CGPoint(x: 0, y: 0))
+        ctx.addLine(to: CGPoint(x: 0, y: yUp(0)))
+        ctx.addLine(to: CGPoint(x: Double(w), y: yUp(Double(w))))
+        ctx.addLine(to: CGPoint(x: Double(w), y: 0))
+        ctx.closePath()
+        ctx.fillPath()
+        return ctx.makeImage()!
+    }
+
+    /// The sign that matters: a horizon descending to the right is levelled by
+    /// a positive (clockwise) `Geometry.angle` of the same size, and the
+    /// crop's own x axis is then parallel to it.
+    func testATiltedHorizonIsLevelledTheRightWay() throws {
+        for tilt in [4.0, -3.0] {
+            let a = try CompositionAnalysis.analyse(Self.horizon(tilted: tilt))
+            let measured = try XCTUnwrap(a.horizonTilt, "a horizon at \(tilt)° was found")
+            XCTAssertEqual(measured, tilt, accuracy: 1, "\(tilt)°: measured \(measured)°")
+            XCTAssertEqual(a.straighten, measured, "beyond the tolerance, it is levelled")
+        }
+        let flat = try CompositionAnalysis.analyse(Self.horizon(tilted: 0.2))
+        XCTAssertEqual(flat.straighten, 0, "within the tolerance a horizon is left alone")
+    }
+
+    private let landscape = CGSize(width: 1200, height: 800)
+
+    private func ratio(_ g: Geometry, _ size: CGSize) -> Double {
+        Double(g.crop.width * size.width) / Double(g.crop.height * size.height)
+    }
+
+    func testEveryCandidateFitsHasItsRatioAndKeepsTheSubject() {
+        let subject = CGRect(x: 0.62, y: 0.3, width: 0.1, height: 0.2)
+        let a = CompositionAnalysis(straighten: 0, horizonTilt: nil, salient: [subject], faces: [])
+        let c = CompositionCandidates.make(current: .default, analysis: a, imageSize: landscape)
+        XCTAssertEqual(c.first?.kind, .current, "the framing it has now is one of the answers, first")
+        XCTAssertGreaterThan(c.count, 4)
+        XCTAssertLessThanOrEqual(c.count, 12)
+        for x in c.dropFirst() {
+            let g = x.geometry
+            XCTAssertTrue(g.fits(in: landscape), "\(x.label) \(x.kind) fits")
+            XCTAssertGreaterThanOrEqual(g.crop.width * g.crop.height, CompositionCandidates.minimumArea - 1e-9)
+            if let want = g.aspect.ratio(sourceAspect: 1.5) {
+                // `snappedToFrame` trims a side by up to 1e-5 to sit on the frame's edge.
+                XCTAssertEqual(ratio(g, landscape), want, accuracy: 1e-4, "\(x.label) is its ratio")
+            }
+            XCTAssertTrue(CompositionCandidates.contains(g, CGRect(x: subject.midX, y: subject.midY, width: 0, height: 0),
+                                                         in: landscape), "the subject stays in \(x.label)")
+            XCTAssertNoThrow(try AgentDocument.validate(["geometry": [
+                "crop": ["x": .number(Double(g.crop.x)), "y": .number(Double(g.crop.y)),
+                         "width": .number(Double(g.crop.width)), "height": .number(Double(g.crop.height))],
+                "angle": .number(g.angle), "aspect": .string(g.aspect.rawValue)]]), "the edit document takes it")
+        }
+        for (i, x) in c.enumerated() {
+            for y in c[(i + 1)...] { XCTAssertFalse(CompositionCandidates.alike(x.geometry, y.geometry)) }
+        }
+        XCTAssertTrue(c.contains { $0.kind == .thirds }, "a subject off centre is put on a third")
+        XCTAssertTrue(Set(c.map(\.label)).isSuperset(of: ["5:4", "1:1"]), "several ratios are offered")
+        XCTAssertFalse(c.contains { $0.geometry.aspect == .r3x2 && $0.kind == .ratio },
+                       "on a 3:2 frame, 3:2 is the original ratio and is not offered twice")
+    }
+
+    /// What draws the eye is kept almost whole, not only its centre: a tight
+    /// crop once cut the top off a firework.
+    func testTheSubjectIsKeptAlmostWhole() {
+        // From the top of the frame most of the way down, as a firework is:
+        // a tight crop that only keeps its centre takes its top off.
+        let burst = CGRect(x: 0.3, y: 0.0, width: 0.4, height: 0.8)
+        let a = CompositionAnalysis(straighten: 0, horizonTilt: nil, salient: [burst], faces: [])
+        let c = CompositionCandidates.make(current: .default, analysis: a, imageSize: landscape)
+        XCTAssertGreaterThan(c.count, 1)
+        for x in c.dropFirst() {
+            XCTAssertGreaterThanOrEqual(CompositionCandidates.coverage(x.geometry, burst, in: landscape),
+                                        CompositionCandidates.subjectKept, "\(x.label) \(x.kind) keeps the burst")
+        }
+    }
+
+    func testAFaceIsNeverCut() {
+        let face = CGRect(x: 0.03, y: 0.2, width: 0.12, height: 0.18)
+        let a = CompositionAnalysis(straighten: 0, horizonTilt: nil, salient: [], faces: [face])
+        let c = CompositionCandidates.make(current: .default, analysis: a, imageSize: landscape)
+        XCTAssertGreaterThan(c.count, 1)
+        for x in c { XCTAssertTrue(CompositionCandidates.contains(x.geometry, face, in: landscape), "\(x.label) keeps the face") }
+    }
+
+    func testATiltIsLevelledOnlyWhenMeasured() {
+        let tilted = CompositionAnalysis(straighten: 3, horizonTilt: 3, salient: [], faces: [])
+        let c = CompositionCandidates.make(current: .default, analysis: tilted, imageSize: landscape)
+        XCTAssertTrue(c.contains { $0.kind == .level }, "the whole frame, levelled")
+        XCTAssertTrue(c.dropFirst().allSatisfy { $0.geometry.angle == 3 })
+        XCTAssertEqual(c.first?.geometry.angle, 0, "the current framing is the unlevelled control")
+        let level = CompositionAnalysis(straighten: 0, horizonTilt: 0.2, salient: [], faces: [])
+        XCTAssertTrue(CompositionCandidates.make(current: .default, analysis: level, imageSize: landscape)
+            .allSatisfy { $0.geometry.angle == 0 })
+    }
+
+    func testTheRatiosFollowThePicturesOrientation() {
+        let a = CompositionAnalysis(straighten: 0, horizonTilt: nil, salient: [], faces: [])
+        // A phone's 9:16, far enough from 2:3 and 4:5 that neither is the
+        // original crop again (crops within `duplicateIoU` are one crop).
+        let portrait = CGSize(width: 1080, height: 1920)
+        let c = CompositionCandidates.make(current: .default, analysis: a, imageSize: portrait)
+        XCTAssertTrue(c.contains { $0.geometry.aspect == .r4x5 && $0.label == "4:5" }, "a portrait is offered 4:5 upright, and says so")
+        XCTAssertTrue(c.contains { $0.label == "2:3" }, "not \"3:2\" for an upright crop")
+        XCTAssertFalse(c.contains { $0.geometry.aspect == .r16x9 }, "and no landscape ratio")
+        // A landscape source turned a quarter is seen upright: the crop's
+        // ratio, which is before the turn, is the transposed one.
+        var turned = Geometry.default
+        turned.quarterTurns = 1
+        let t = CompositionCandidates.make(current: turned, analysis: a, imageSize: landscape)
+        let fourFive = t.first { $0.label == "4:5" && $0.kind != .current }
+        XCTAssertEqual(fourFive?.geometry.aspect, .r5x4, "seen 4:5 after the turn, cut 5:4 before it")
+        XCTAssertTrue(t.dropFirst().allSatisfy { $0.geometry.quarterTurns == 1 }, "the person's turn is kept")
+    }
+
+    func testATileIsTheCropApplyWillMake() throws {
+        let proof = Self.horizon(tilted: 0)
+        var g = Geometry.default
+        g.crop = CropRect(x: 0.25, y: 0.25, width: 0.5, height: 0.5)
+        let tile = try XCTUnwrap(CompositionCandidates.render(g, from: proof, longEdge: 400))
+        XCTAssertEqual(Double(tile.width) / Double(tile.height), 1.5, accuracy: 0.02, "a half-size crop of a 3:2 frame")
+        let whole = try XCTUnwrap(CompositionCandidates.render(.default, from: proof, longEdge: 400))
+        XCTAssertEqual(max(whole.width, whole.height), 400)
+    }
+}
+
 /// Proofs on a real engine, of a frame drawn here — so nothing is skipped.
 @MainActor
 final class AISessionTests: XCTestCase {
@@ -565,6 +708,55 @@ final class AISessionTests: XCTestCase {
         XCTAssertEqual(assistant.exposureChoice?.byAI, false)
     }
 
+    /// Recommend crops, Apply one, and Undo AI changes puts the framing back.
+    func testRecommendingAndApplyingACrop() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        let s = ws.session
+        let before = s.geometry
+        let script = Script([["summary": "s", "ranking": [["index": 2, "score": 90, "reason": "r"],
+                                                          ["index": 1, "score": 60, "reason": "keep"]]]])
+        let assistant = AIAssistant(session: s)
+        assistant.makeClient = { AIClient(kind: .anthropic, model: "claude-opus-5-5", baseURL: "", apiKey: "k", transport: script) }
+        assistant.recommendComposition()
+        try await Task.sleep(for: .milliseconds(50))
+        while assistant.busy { try await Task.sleep(for: .milliseconds(100)) }
+
+        XCTAssertNil(assistant.error, assistant.error ?? "")
+        let rec = try XCTUnwrap(assistant.composition)
+        XCTAssertEqual(rec.picks.map(\.index), [2, 1])
+        XCTAssertTrue(script.sent[0]["system"]?.string?.contains("crop") == true)
+        XCTAssertEqual(s.geometry, before, "recommending changes nothing")
+        XCTAssertTrue(assistant.isCurrent(rec.picks[1]), "tile 1 is the framing it has now")
+
+        let pick = rec.picks[0]
+        assistant.applyComposition(pick)
+        XCTAssertNil(assistant.error, assistant.error ?? "")
+        XCTAssertTrue(assistant.isCurrent(pick), "the frame is cropped as the tile shows")
+        XCTAssertEqual(s.geometry.aspect, pick.candidate.geometry.aspect)
+        XCTAssertTrue(s.geometry.fits(in: s.sourceImageSize))
+
+        assistant.undoAI()
+        XCTAssertEqual(s.geometry.crop, before.crop, "Undo AI changes puts the framing back")
+        XCTAssertEqual(s.geometry.angle, before.angle)
+    }
+
+    func testCompositionIsRefusedUnderAFilmEdge() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        _ = try await ws.edit(["params": ["filmEdge": ["active": true]]])
+        let script = Script([])
+        let assistant = AIAssistant(session: ws.session)
+        assistant.makeClient = { AIClient(kind: .anthropic, model: "claude-opus-5-5", baseURL: "", apiKey: "k", transport: script) }
+        assistant.recommendComposition()
+        try await Task.sleep(for: .milliseconds(50))
+        while assistant.busy { try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertNotNil(assistant.error)
+        XCTAssertEqual(script.sent.count, 0, "nothing is sent")
+    }
+
     /// A crop through the agent layer settles. A crop re-resolves fields the
     /// engine carries (`dateBack.framing`, `filmEdge.framing`) without asking
     /// for a print — in the window it is a draw — so the engine's parameters
@@ -722,6 +914,25 @@ final class AIEndToEndTests: XCTestCase {
         let out = env["SPK_AI_OUT"] ?? "/tmp/spk-test/e2e-refined.jpg"
         let preview = try await ws.preview(to: URL(fileURLWithPath: out), longEdge: 1024)
         print("E2E preview:", preview.path)
+        // Composition, when asked for: the three crops, and the best applied.
+        if env["SPK_AI_COMPOSE"] != nil {
+            assistant.recommendComposition()
+            try await finish()
+            XCTAssertNil(assistant.error, assistant.error ?? "")
+            let comp = try XCTUnwrap(assistant.composition)
+            print("E2E composition summary:", comp.summary, "compared:", comp.compared)
+            for (n, p) in comp.picks.enumerated() {
+                print("E2E crop \(p.index) \(p.candidate.kind.rawValue) \(p.candidate.label) angle \(p.candidate.geometry.angle) score \(p.score): \(p.reason)")
+                if let dir = env["SPK_AI_OUT"].map({ URL(fileURLWithPath: $0).deletingLastPathComponent() }) {
+                    try? ProofSheet.writeJPEG(p.thumbnail, to: dir.appending(path: "crop-\(n + 1).jpg"))
+                }
+            }
+            if let best = comp.picks.first {
+                assistant.applyComposition(best)
+                try await ws.settle()
+                XCTAssertTrue(assistant.isCurrent(best))
+            }
+        }
         // The finished print at the photograph's own size, before Undo below
         // takes the edit back: what Export would write, as a JPEG.
         if let full = env["SPK_AI_FULL"] {

@@ -30,6 +30,8 @@
 		D7D60FA4EE36EA6A6F8DAEDD /* AIPrompts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIPrompts.swift"; sourceTree = "<group>"; };
 		8613BBBD80BA85142E6E47DC /* AIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIProvider.swift"; sourceTree = "<group>"; };
 		99F32C53BAD0BAF51BC1781A /* AISettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AISettings.swift"; sourceTree = "<group>"; };
+		EF0DEBFCCB0F9700DA8D6582 /* CompositionAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompositionAnalysis.swift"; sourceTree = "<group>"; };
+		D9B12EDCCEC1534AC42042D6 /* CompositionCandidates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompositionCandidates.swift"; sourceTree = "<group>"; };
 		3224FCB3F4F27DE5231A3F36 /* ImageMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ImageMetrics.swift"; sourceTree = "<group>"; };
 		BC0AA8A2E5868D5A5FBCA628 /* ProofSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProofSheet.swift"; sourceTree = "<group>"; };
 		527312969419113845F9CB7D /* AI */ = {
@@ -39,6 +41,8 @@
 				D7D60FA4EE36EA6A6F8DAEDD /* AIPrompts.swift */,
 				8613BBBD80BA85142E6E47DC /* AIProvider.swift */,
 				99F32C53BAD0BAF51BC1781A /* AISettings.swift */,
+				EF0DEBFCCB0F9700DA8D6582 /* CompositionAnalysis.swift */,
+				D9B12EDCCEC1534AC42042D6 /* CompositionCandidates.swift */,
 				3224FCB3F4F27DE5231A3F36 /* ImageMetrics.swift */,
 				BC0AA8A2E5868D5A5FBCA628 /* ProofSheet.swift */
 			);
@@ -622,6 +626,8 @@
 		574C0A0861B835F2655DF06B /* AIPrompts.swift */ = {isa = PBXBuildFile; fileRef = D7D60FA4EE36EA6A6F8DAEDD; };
 		3F4172227EF2C15A2FD69EC8 /* AIProvider.swift */ = {isa = PBXBuildFile; fileRef = 8613BBBD80BA85142E6E47DC; };
 		8F2541C4CAB6D26242780880 /* AISettings.swift */ = {isa = PBXBuildFile; fileRef = 99F32C53BAD0BAF51BC1781A; };
+		60AFF7E73469779979F62AF4 /* CompositionAnalysis.swift */ = {isa = PBXBuildFile; fileRef = EF0DEBFCCB0F9700DA8D6582; };
+		31254C2DD8F6992BE6A1E207 /* CompositionCandidates.swift */ = {isa = PBXBuildFile; fileRef = D9B12EDCCEC1534AC42042D6; };
 		964490296E8302BC9BAD7706 /* ImageMetrics.swift */ = {isa = PBXBuildFile; fileRef = 3224FCB3F4F27DE5231A3F36; };
 		6E026D8CDCDD236BDA7D617F /* ProofSheet.swift */ = {isa = PBXBuildFile; fileRef = BC0AA8A2E5868D5A5FBCA628; };
 		36E5C336CD3474CD19DFA79C /* CineonLUT.swift */ = {isa = PBXBuildFile; fileRef = DB77486F6667B838E6E94001; };
@@ -763,6 +769,8 @@
 				574C0A0861B835F2655DF06B /* AIPrompts.swift */,
 				3F4172227EF2C15A2FD69EC8 /* AIProvider.swift */,
 				8F2541C4CAB6D26242780880 /* AISettings.swift */,
+				60AFF7E73469779979F62AF4 /* CompositionAnalysis.swift */,
+				31254C2DD8F6992BE6A1E207 /* CompositionCandidates.swift */,
 				964490296E8302BC9BAD7706 /* ImageMetrics.swift */,
 				6E026D8CDCDD236BDA7D617F /* ProofSheet.swift */,
 				36E5C336CD3474CD19DFA79C /* CineonLUT.swift */,
@@ -986,6 +994,8 @@
 		E6D7B7970771B572A6674F4D /* AIPrompts.swift */ = {isa = PBXBuildFile; fileRef = D7D60FA4EE36EA6A6F8DAEDD; };
 		A4EC7801EB09E4AD8B4356DB /* AIProvider.swift */ = {isa = PBXBuildFile; fileRef = 8613BBBD80BA85142E6E47DC; };
 		96D0B5DEF3726AF4145CFB94 /* AISettings.swift */ = {isa = PBXBuildFile; fileRef = 99F32C53BAD0BAF51BC1781A; };
+		9F9D5C46841F78F618EE281C /* CompositionAnalysis.swift */ = {isa = PBXBuildFile; fileRef = EF0DEBFCCB0F9700DA8D6582; };
+		09C9F3145CD418322FF28B1F /* CompositionCandidates.swift */ = {isa = PBXBuildFile; fileRef = D9B12EDCCEC1534AC42042D6; };
 		06494EE23A2573B4D3771A9B /* ImageMetrics.swift */ = {isa = PBXBuildFile; fileRef = 3224FCB3F4F27DE5231A3F36; };
 		1D9963C2980B5BF919224B8F /* ProofSheet.swift */ = {isa = PBXBuildFile; fileRef = BC0AA8A2E5868D5A5FBCA628; };
 		BF474BA5499BF78CD5FB92F3 /* CineonLUT.swift */ = {isa = PBXBuildFile; fileRef = DB77486F6667B838E6E94001; };
@@ -1188,6 +1198,8 @@
 				E6D7B7970771B572A6674F4D /* AIPrompts.swift */,
 				A4EC7801EB09E4AD8B4356DB /* AIProvider.swift */,
 				96D0B5DEF3726AF4145CFB94 /* AISettings.swift */,
+				9F9D5C46841F78F618EE281C /* CompositionAnalysis.swift */,
+				09C9F3145CD418322FF28B1F /* CompositionCandidates.swift */,
 				06494EE23A2573B4D3771A9B /* ImageMetrics.swift */,
 				1D9963C2980B5BF919224B8F /* ProofSheet.swift */,
 				BF474BA5499BF78CD5FB92F3 /* CineonLUT.swift */,

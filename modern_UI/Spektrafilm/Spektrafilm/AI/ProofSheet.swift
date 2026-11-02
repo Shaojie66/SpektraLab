@@ -169,12 +169,15 @@ enum ProofSheet {
     /// Print `candidates` on the open frame. `progress` is called on the main
     /// actor after each proof with (done, total).
     @MainActor
+    /// `wholeFrame` prints the photograph uncropped and unturned — the frame
+    /// composition is worked out on, in the coordinates `Geometry` uses.
     static func render(session: Session, candidates: [ProofCandidate], longEdge: Int = defaultLongEdge,
+                       wholeFrame: Bool = false,
                        progress: ((Int, Int) -> Void)? = nil) async throws -> [Proof] {
         guard session.selection != nil, let decoded = await session.ensureDecoded() else { throw Failure.nothingOpen }
         guard session.pair == nil else { throw Failure.pair }
         let device = session.renderer.device
-        let geometry = session.geometry
+        let geometry = wholeFrame ? Geometry.default : session.geometry
         let frame = try await Task.detached(priority: .userInitiated) {
             var image = Session.engineImage(decoded.linear, size: decoded.pixelSize,
                                             cut: geometry.isIdentity ? nil : geometry)
@@ -249,9 +252,32 @@ enum ProofSheet {
     /// numbers are big and the names are the catalogue's.
     static func contactSheet(_ proofs: [Proof], catalog: StockCatalog = .shared,
                              tile: Int = 300, columns: Int? = nil) -> CGImage? {
-        guard !proofs.isEmpty, let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
-        let cols = columns ?? min(5, Int(Double(proofs.count).squareRoot().rounded(.up)) + 1)
-        let rows = (proofs.count + cols - 1) / cols
+        sheet(proofs.map { proof in
+            let title = proof.candidate.meter.flatMap(ExposureMethod.init(rawValue:))?.title
+                ?? catalog.stock(proof.candidate.film)?.name ?? proof.candidate.film
+            var second = proof.candidate.paper.map { catalog.stock($0)?.name ?? $0 } ?? "scanned"
+            if proof.candidate.meter != nil, let ev = proof.exposureEV {
+                second = String(format: "metered %+.1f EV", ev)
+            }
+            return Tile(image: proof.image, title: "\(proof.index)  \(title)", subtitle: second)
+        }, tile: tile, columns: columns)
+    }
+
+    /// One labelled picture on a sheet.
+    struct Tile {
+        let image: CGImage
+        let title: String
+        let subtitle: String
+    }
+
+    /// Pictures on one sRGB image, `columns` across, each fitted in a
+    /// `tile`-pixel square with its two lines of label — what a model is shown,
+    /// so the numbers are big. The film sheet, the exposure sheet and the
+    /// composition sheet are all this.
+    static func sheet(_ tiles: [Tile], tile: Int = 300, columns: Int? = nil) -> CGImage? {
+        guard !tiles.isEmpty, let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        let cols = columns ?? min(5, Int(Double(tiles.count).squareRoot().rounded(.up)) + 1)
+        let rows = (tiles.count + cols - 1) / cols
         let pad = 8, label = 34
         let cellW = tile + pad, cellH = tile + label + pad
         let width = cols * cellW + pad, height = rows * cellH + pad
@@ -261,26 +287,19 @@ enum ProofSheet {
         ctx.setFillColor(CGColor(gray: 0.12, alpha: 1))
         ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
         ctx.interpolationQuality = .high
-        for (n, proof) in proofs.enumerated() {
+        for (n, t) in tiles.enumerated() {
             let col = n % cols, row = n / cols
             // Core Graphics is y-up; rows are laid top-down.
             let x = pad + col * cellW
             let top = height - pad - row * cellH
-            let iw = CGFloat(proof.image.width), ih = CGFloat(proof.image.height)
+            let iw = CGFloat(t.image.width), ih = CGFloat(t.image.height)
             let s = CGFloat(tile) / max(iw, ih)
             let dw = iw * s, dh = ih * s
             let rect = CGRect(x: CGFloat(x) + (CGFloat(tile) - dw) / 2,
                               y: CGFloat(top - tile) + (CGFloat(tile) - dh) / 2, width: dw, height: dh)
-            ctx.draw(proof.image, in: rect)
-            let title = proof.candidate.meter.flatMap(ExposureMethod.init(rawValue:))?.title
-                ?? catalog.stock(proof.candidate.film)?.name ?? proof.candidate.film
-            draw("\(proof.index)  \(title)",
-                 at: CGPoint(x: x, y: top - tile - 18), size: 15, bold: true, in: ctx)
-            var second = proof.candidate.paper.map { catalog.stock($0)?.name ?? $0 } ?? "scanned"
-            if proof.candidate.meter != nil, let ev = proof.exposureEV {
-                second = String(format: "metered %+.1f EV", ev)
-            }
-            draw(second, at: CGPoint(x: x, y: top - tile - 33), size: 12, bold: false, in: ctx)
+            ctx.draw(t.image, in: rect)
+            draw(t.title, at: CGPoint(x: x, y: top - tile - 18), size: 15, bold: true, in: ctx)
+            draw(t.subtitle, at: CGPoint(x: x, y: top - tile - 33), size: 12, bold: false, in: ctx)
         }
         return ctx.makeImage()
     }

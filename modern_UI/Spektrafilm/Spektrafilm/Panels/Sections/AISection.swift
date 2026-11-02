@@ -48,6 +48,8 @@ struct AISection: View {
             VStack(spacing: 0) {
                 chooser
                 SectionDivider(above: "ai.choose")
+                composer
+                SectionDivider(above: "ai.compose")
                 refiner
             }
         }
@@ -123,6 +125,61 @@ struct AISection: View {
         }
     }
 
+    // MARK: compose
+
+    private var composer: some View {
+        PanelSection(L("Compose", zh: "AI 构图"), key: "ai.compose") {
+            RailRows {
+                caption(L("Crops built from what this Mac finds in the frame — the horizon, faces, where the eye goes — at common ratios; the model picks the three best. Levels a horizon tilted more than half a degree.",
+                          zh: "根据本机在画面里检测到的地平线、人脸和视觉重心，按常用比例生成裁切方案，由模型挑出最好的三个。地平线倾斜超过 0.5° 时会自动拉直。"))
+                pill(L("Recommend crops", zh: "推荐构图"),
+                     help: L("Uses the intent above.", zh: "使用上面填写的意图。"),
+                     enabled: hasFrame && !assistant.busy && !session.params.filmEdge.active) { assistant.recommendComposition() }
+                if session.params.filmEdge.active {
+                    caption(L("Not available while Film Edge is on: the gate holds the ratio.",
+                              zh: "片边开启时不可用：片门锁定了裁切比例。"))
+                }
+                if let rec = assistant.composition, rec.url == session.selection {
+                    if !rec.summary.isEmpty {
+                        Text(rec.summary).font(Theme.Font.caption).foregroundStyle(Theme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    ForEach(rec.picks) { pick in compositionRow(pick) }
+                    caption(L("\(rec.compared) crops compared.", zh: "比较了 \(rec.compared) 个裁切方案。"))
+                }
+            }
+        }
+    }
+
+    private func compositionRow(_ pick: AIAssistant.CompositionPick) -> some View {
+        let c = pick.candidate
+        let ratio = c.kind == .current ? L("Current framing", zh: "当前构图")
+            : (c.geometry.aspect == .original || c.geometry.aspect == .originalPortrait ? L("Original ratio", zh: "原比例") : c.label)
+        return HStack(alignment: .top, spacing: 8) {
+            Image(decorative: pick.thumbnail, scale: 1)
+                .resizable().aspectRatio(contentMode: .fit)
+                .frame(width: 84, height: 84)
+                .background(Theme.plot)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(pick.score)").font(Theme.Font.value).foregroundStyle(Theme.accent)
+                    Text(ratio).font(Theme.Font.label).foregroundStyle(Theme.text).lineLimit(1)
+                }
+                if c.straightened {
+                    caption(String(format: L("Levelled %+.1f°", zh: "拉直 %+.1f°"), c.geometry.angle))
+                }
+                Text(pick.reason).font(Theme.Font.caption).foregroundStyle(Theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                if assistant.isCurrent(pick) {
+                    caption(L("In use", zh: "当前使用"))
+                } else {
+                    pill(L("Apply", zh: "应用"), help: L("Crop and level the frame like this.", zh: "按这个方案裁切和拉直。"),
+                         enabled: !assistant.busy && !session.batchExporting) { assistant.applyComposition(pick) }
+                }
+            }
+        }
+    }
+
     // MARK: refine
 
     private var refiner: some View {
@@ -182,6 +239,8 @@ struct AISection: View {
             }
         case .metering:
             progress(L("Choosing the exposure…", zh: "正在判断曝光……"))
+        case .analysing:
+            progress(L("Reading the frame…", zh: "正在分析画面……"))
         case .proofing(let done, let total):
             progress(L("Printing proofs \(done)/\(total)…", zh: "正在冲印小样 \(done)/\(total)……"))
         case .asking:

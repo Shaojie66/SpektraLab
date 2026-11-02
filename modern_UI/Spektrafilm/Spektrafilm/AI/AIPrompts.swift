@@ -96,6 +96,49 @@ enum AIPrompts {
         return (m, answer["reason"]?.string ?? "")
     }
 
+    // MARK: choosing a crop
+
+    static var compositionSystem: String {
+        """
+        You are a photographer and picture editor choosing how to crop a photograph. You are shown a \
+        numbered sheet of crops of the same photograph, each already rendered: tile 1 is the framing it has \
+        now, and some tiles are levelled where the horizon was measured as tilted. Every crop was built by \
+        rule (the subject on a third, or centred, at a common ratio); you judge which work as pictures.
+
+        Weigh: where the subject sits and whether it has room to look or move into; a level horizon, or a \
+        tilt that is clearly intended; nothing important cut at an edge — heads, hands, feet, the top of a \
+        firework; distractions pushed out or kept in; balance and breathing room; a ratio that suits the \
+        content (tall for a standing figure or a tree, wide for a landscape or a crowd, square for a strong \
+        centred form). Prefer a crop that improves the picture over one that only changes it, and choose \
+        tile 1 if the framing is already best.
+
+        Return the best 3, best first, each with a score from 0 to 100 and a reason of one or two sentences \
+        that names what the crop does for this picture. The summary is one sentence on the photograph's \
+        composition. Write the summary and reasons in \(language).
+        """
+    }
+
+    static func compositionUser(candidates: [CompositionCandidate], analysis: CompositionAnalysis,
+                                exif: EXIFReadout?, intent: String) -> String {
+        var lines = ["The crops above:"]
+        for (i, c) in candidates.enumerated() {
+            let area = Int((c.geometry.crop.width * c.geometry.crop.height * 100).rounded())
+            var row = "\(i + 1). \(c.kind == .current ? "the current framing" : c.label) — \(area)% of the frame"
+            if c.straightened { row += String(format: ", levelled %+.1f°", c.geometry.angle) }
+            lines.append(row)
+        }
+        if let tilt = analysis.horizonTilt {
+            lines.append(String(format: "Horizon measured at %+.1f°%@.", tilt,
+                                analysis.straighten == 0 ? " (within tolerance, left as is)" : ""))
+        } else {
+            lines.append("No horizon was found.")
+        }
+        lines.append(analysis.faces.isEmpty ? "No faces were found." : "\(analysis.faces.count) face(s) found; no crop cuts one.")
+        lines.append(shot(exif))
+        lines.append(wish(intent))
+        return lines.joined(separator: "\n")
+    }
+
     // MARK: choosing a film
 
     static var chooserSystem: String {
