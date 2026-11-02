@@ -565,6 +565,26 @@ final class AISessionTests: XCTestCase {
         XCTAssertEqual(assistant.exposureChoice?.byAI, false)
     }
 
+    /// A crop through the agent layer settles. A crop re-resolves fields the
+    /// engine carries (`dateBack.framing`, `filmEdge.framing`) without asking
+    /// for a print — in the window it is a draw — so the engine's parameters
+    /// never caught up with the sidecar and `settle` waited out its timeout:
+    /// `spektralab edit … --patch '{"geometry":…}'` and Apply on a crop both hung.
+    func testAGeometryEditSettles() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        ws.timeout = 10
+        try await ws.open(url.path)
+        try await ws.develop()
+        let written = try await ws.edit(["geometry": ["crop": ["x": 0.1, "y": 0.1, "width": 0.7, "height": 0.7],
+                                                      "aspect": "free"]])
+        XCTAssertTrue(written.contains("geometry.crop.width"))
+        try await ws.settle()
+        XCTAssertTrue(ws.session.params.delta(from: ws.session.scheduler.sent).delta.isEmpty,
+                      "the engine has everything the sidecar tells it")
+        XCTAssertFalse(ws.session.scheduler.pending)
+    }
+
     /// Restoring an earlier edit is one step, and Undo takes it back.
     func testRestoringAnEditIsOneUndoableStep() async throws {
         let url = try syntheticFrame()

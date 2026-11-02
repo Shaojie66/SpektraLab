@@ -95,7 +95,10 @@ final class RenderScheduler {
         defer { loop = nil }
         while !Task.isCancelled, gen == generation, let sid = sessionID {
             let (delta, layers) = wanted.delta(from: sent)
-            if delta.isEmpty { return }
+            // Nothing the engine is told differs: it already has `wanted`.
+            // Adopted as sent, or `pending` stays true for a change that is
+            // off the wire (a re-resolved framing) and never clears.
+            if delta.isEmpty { sent = wanted; return }
             let shoot = layers.contains(.shoot)
             try? await Task.sleep(for: .milliseconds(shoot ? 220 : 40))
             if Task.isCancelled || gen != generation {
@@ -114,7 +117,7 @@ final class RenderScheduler {
             // Re-read after the debounce: the user kept dragging.
             let target = wanted
             let (d2, l2) = target.delta(from: sent)
-            if d2.isEmpty { continue }
+            if d2.isEmpty { sent = target; continue }
             onBusy?(true)
             do {
                 var req = RenderRequest(sessionID: sid, paramsDelta: d2)

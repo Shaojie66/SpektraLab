@@ -48,9 +48,16 @@ final class AgentWorkspace {
     }
 
     /// The engine has everything it was asked for, and nothing is in flight.
+    ///
+    /// "Has everything" is the **wire**: what the sidecar says and what was
+    /// sent differ in nothing the engine is told (`FilmParams.delta`). Fields
+    /// off the wire can move without a render — a crop re-resolves
+    /// `dateBack.framing` and `filmEdge.framing`, and in the window a crop is
+    /// a draw — and comparing the whole struct waited for a render nothing
+    /// would ever ask for: a geometry edit through the CLI timed out.
     private var settled: Bool {
         session.serviceSessionIDForExport != nil && !session.scheduler.pending
-            && session.scheduler.sent == session.params && !session.busy
+            && session.params.delta(from: session.scheduler.sent).delta.isEmpty && !session.busy
     }
 
     // MARK: opening
