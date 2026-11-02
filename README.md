@@ -85,7 +85,7 @@ the pointer. A pair is one item in the filmstrip and exports as one picture.
 Drag a thumbnail along the filmstrip to reorder a folder; the order is kept for
 that folder. A file dropped from Finder still opens and edits.
 
-## AI film choice and refinement (this fork)
+## AI film choice, composition and refinement (this fork)
 
 The Parameters rail has an **AI** tab. It is off by default: turn it on in
 **Settings ▸ AI**, choose a provider and enter its API key. For an
@@ -115,6 +115,22 @@ and latitude coverage, then returns 3–5 choices with scores and reasons.
 separate engine instance, leaving the canvas, edit and undo history alone;
 19 films at 768 px took about 3 seconds on an M-series Mac.
 
+**Compose** suggests crops. **Recommend crops** first measures one whole-frame proof
+on the Mac with the Vision framework: horizon tilt, visual centre of gravity (saliency)
+and faces. This runs locally, is free and needs no network. It then builds 8–12 crop
+candidates by rule: the subject on a third or centred, at ratios that follow the picture's
+orientation (landscape: original, 3:2, 5:4, 1:1, 16:9; portrait: original, 2:3, 4:5, 1:1,
+9:16), and levelled automatically when the horizon is off by more than 0.5°. Tile 1 is
+always the current framing, for comparison. Hard rules: never cut a face, keep at least
+90% of the salient region, cover at least 40% of the original, and merge
+near-identical candidates. The candidates are rendered as a numbered sheet and the model
+only picks the best three and says why; it never names coordinates, because vision models
+compare pictures well but place a rectangle badly. Each tile uses the same crop transform
+as Apply, so what you see is what you get. **Apply** crops and levels the photo by that
+plan, keeping your earlier 90° turns and flips; **Undo AI changes** restores it in one
+step. Not available with Film Edge on or in half-frame pairs. Local Ollama (for example
+`gemma4:26b`) and Claude both work.
+
 **Refine** gives the model a 1024 px view of the print and up to three rounds
 to adjust metering, Film Exposure, paper brightness, enlarger Y/M filters, pre-flash,
 grain, halation, Scene Placement and Post-Dev grading. It cannot change film,
@@ -125,7 +141,7 @@ generative retouching: it changes existing controls, not pixels or the film
 model, and the result is saved in the ordinary sidecar. Half-frame pairs are
 not yet supported.
 
-Photos are sent only when **Recommend** or **Refine** is pressed, along with
+Photos are sent only when **Recommend**, **Recommend crops** or **Refine** is pressed, along with
 exposure data and edit values; the connection test sends a text-only request.
 Usage is billed to your own API account. Keys are stored in the macOS Keychain,
 not in settings, sidecars or logs. The MCP tool `compare_stocks` also lets
