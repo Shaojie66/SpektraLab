@@ -339,7 +339,13 @@ rejecting every delta.**
 - **No display transform.** The canvas layer is tagged ProPhoto RGB and
   ColorSync converts for the display (§7.5).
 - **No post-print editing beyond Layer 2.** The product edits the physical
-  process; retouching belongs to other software.
+  process; retouching belongs to other software. **One exception in this
+  fork: skin smoothing, and only before the film** (§7.14). The decode is
+  retouched before the engine is handed it — the scene in front of the
+  camera, not the print — so the film's grain, halation and print curve
+  still land on the skin exactly as on everything else. Smoothing the print
+  instead would wipe the grain off a face and leave it a plastic patch in a
+  grained picture. Nothing else is retouched, and nothing after the print.
 - **No masks, for now.** Built, withdrawn behind `FeatureFlags.masks = false`
   pending a redesign; the flag also stops sidecar masks reaching the kernel.
 
