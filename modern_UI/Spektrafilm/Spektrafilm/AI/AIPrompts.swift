@@ -224,7 +224,8 @@ enum AIPrompts {
         The process runs in order. First the physical stages: the meter and Film Exposure (stops on the \
         negative), the \
         enlarger's print brightness (stops) and its yellow and magenta filter shifts (the print's colour \
-        balance: +Y is yellower, −Y bluer; +M more magenta, −M greener), and Scene Placement, which pulls \
+        balance — a filter takes its own colour out of the print, as in a darkroom: +Y prints bluer, −Y yellower; \
+        +M prints greener, −M more magenta), and Scene Placement, which pulls \
         highlights or shadows the medium cannot hold back inside it. Then Post-Dev, a grade on the scan: white \
         balance, exposure, contrast, brightness, highlights, shadows, black and white point, saturation, colour \
         balance, curves, vignette. Correct colour with the filter shifts and density with print brightness \

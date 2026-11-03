@@ -1152,6 +1152,37 @@ final class AISessionTests: XCTestCase {
         }
     }
 
+    /// **What the refiner is told about the filters is what they do.** An
+    /// enlarger's filter takes its colour *out* of the print: more yellow
+    /// prints bluer, more magenta greener (`EnlargerFilterTests`, which needs
+    /// a fixture and so skips here). The prompt once said the opposite, and a
+    /// model correcting a green cast with magenta made it greener every round
+    /// — found by measuring Refine against a reference. Measured here on the
+    /// synthetic frame, so it never skips, and held against the prompt's words.
+    func testTheRefinerIsToldWhichWayTheFiltersMoveThePrint() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        try await ws.process()
+        func cast(_ y: Double, _ m: Double) async throws -> ImageMetrics {
+            _ = try await ws.edit(["params": ["yFilterShift": .number(y), "mFilterShift": .number(m)]])
+            try await ws.settle()
+            let file = try await ws.preview(longEdge: 512)
+            defer { try? FileManager.default.removeItem(at: file) }
+            return try XCTUnwrap(AIAssistant.metrics(try Data(contentsOf: file)))
+        }
+        let neutral = try await cast(0, 0)
+        let yellow = try await cast(0.3, 0)
+        let magenta = try await cast(0, 0.3)
+        XCTAssertLessThan(yellow.castYB, neutral.castYB - 0.01, "+Y prints bluer")
+        XCTAssertLessThan(magenta.castRG, neutral.castRG - 0.01, "+M prints greener")
+
+        let text = AIPrompts.refinerSystem
+        XCTAssertTrue(text.contains("+Y prints bluer, −Y yellower"), "the prompt says what +Y does")
+        XCTAssertTrue(text.contains("+M prints greener, −M more magenta"), "and what +M does")
+        XCTAssertFalse(text.contains("+Y is yellower"), "not the opposite")
+    }
+
     /// With a reference, every round carries it, labelled and ahead of the
     /// print — each round is a request of its own — and Undo still takes the
     /// whole run back. Without one, a round is the print and the text only.
