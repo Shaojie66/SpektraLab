@@ -369,7 +369,10 @@ map. Three things to keep:
   `TEST_RUNNER_SPK_AI_REFERENCE=<picture>` and run
   `AIReferenceEndToEndTests` for Refine toward a reference: it prints the
   `ImageMetrics` gap before and after, and `TEST_RUNNER_SPK_AI_OUT=<folder>`
-  keeps `reference.jpg`, `before.jpg` and `after.jpg`.
+  keeps `reference.jpg`, `before.jpg` and `after.jpg`. Add
+  `TEST_RUNNER_SPK_AI_CHOOSE=1` to choose and apply a film toward the
+  reference before refining; it prints where the pick stands among the proofs
+  by film distance.
 
 ## Traps
 

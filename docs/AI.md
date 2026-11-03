@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=0751c03; updated=2026-11-03 -->
+<!-- README_SYNC: source=4dacb23; updated=2026-11-03 -->
 **English** · [简体中文](AI.zh-CN.md) · [Back to the README](../README.md)
 
 # The AI features
@@ -54,6 +54,36 @@ Proofs run in their own engine instance, so the canvas, the edit and its undo
 history are untouched. 19 films at 768 px took about 3 seconds on an M-series
 Mac.
 
+**Toward a reference.** Under the intent field, **Reference image…** opens a file
+panel, or you drop a picture on that row. It then shows as a thumbnail with its
+file name, **Change…** and **Remove**. Any file macOS can read works (JPEG,
+PNG, HEIC, TIFF; a RAW gives its embedded preview). It is read upright, scaled
+to 1024 px and converted to sRGB; a file that is not an image is refused with a
+message naming it. Choose a film and [Refine](#refine) share this one
+reference, as they share the intent; Compose does not use it.
+
+With a reference, the films' request sends it, labelled "Reference:", ahead of
+the contact sheet, labelled "Contact sheet:". The model is told to rank first
+the films whose own rendering comes closest to the reference's look —
+saturation, contrast, palette, how skin, foliage and sky render — and not its
+subject or framing. It is told not to rule a film out for overall brightness or
+an overall cast, which Refine sets afterwards (print brightness, the enlarger's
+filters), and to follow your intent where the two disagree. Each tile also
+carries a "film distance": how far its contrast and colourfulness are from the
+reference's (lower is closer). Brightness and overall cast are deliberately not
+counted. The distances are whole-frame averages, so skin, sky and foliage are
+left to the model's eye. The exposure step above is done without the reference:
+the meter is the scene's.
+
+A reference with no colour (colourfulness under 4) brings black-and-white films
+in for that run even if **Include black and white** is off, and the line under
+the ranking says so. With a reference that line reads, for example, "19 films
+compared on one neutral print, against the reference." Without a reference,
+the request is unchanged. In a test on a small local model (`qwen3-vl` 8B on a
+MacBook Air), the film picked was closer to the reference than the current
+Portra 400 in all three photo and reference pairs tried (film distance 0.82
+against 2.06, 2.59 against 3.70, 2.20 against 5.67).
+
 ## Compose
 
 **Recommend crops** measures one whole-frame proof on the Mac (Vision): the
@@ -88,12 +118,8 @@ refusal is sent back to it. This is not generative retouching: it moves
 existing controls, never the film model or the print's pixels, and the result
 is saved in the ordinary sidecar.
 
-You can also give Refine a reference picture: **Reference image…** opens a file
-panel, or you drop a picture on that row. It then shows as a thumbnail with its
-file name, **Change…** and **Remove**. Any file macOS can read works (JPEG, PNG,
-HEIC, TIFF; a RAW gives its embedded preview). It is read upright, scaled to the
-same 1024 px as the print and converted to sRGB; a file that is not an image is
-refused with a message naming it.
+Refine can also follow a reference picture: the one chosen under the intent in
+[Choose a film](#choose-a-film), which describes what files it takes.
 
 With a reference, every round sends it, labelled "Reference:", ahead of the
 print, labelled "Current print:". The model is told to bring the print's look
@@ -116,10 +142,10 @@ that leaves it noticeably further away is taken back; the panel marks it
 "Taken back", and the next round is told. The last round is measured too, so
 a run toward a reference does not end further from it than it began.
 
-The reference is held in memory only. It stays when you switch photos, so a
-roll can be refined toward one reference; it is never saved in a photo's
-sidecar and is gone when the app quits. Without a reference, Refine's request
-is unchanged.
+The reference, shared by Choose a film and Refine, is held in memory only. It
+stays when you switch photos, so a roll can be refined toward one reference; it
+is never saved in a photo's sidecar and is gone when the app quits. Without a
+reference, Refine's request is unchanged.
 
 It is told how many faces were found, how many could not be read, and whether
 they are all small. It uses skin smoothing only when there is a face —
@@ -192,8 +218,8 @@ paste settings does not copy them: every photo has different faces.
 
 - Photos leave the Mac only when you press **Recommend**, **Recommend crops** or
   **Refine**, together with exposure data and edit values; when you have chosen
-  a reference image, Refine sends it too, at the same size as the print, so each
-  round of a cloud model costs one more image. The connection test sends text
+  a reference image, Recommend and Refine send it too, at 1024 px, so each
+  request to a cloud model costs one more image. The connection test sends text
   only. With local Ollama nothing leaves the Mac.
 - Usage of a cloud model is billed to your own account.
 - Keys are stored in the macOS Keychain, never in settings, sidecars or logs.
