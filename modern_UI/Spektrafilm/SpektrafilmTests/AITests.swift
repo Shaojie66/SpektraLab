@@ -928,6 +928,58 @@ final class CompositionTests: XCTestCase {
 }
 
 /// Proofs on a real engine, of a frame drawn here — so nothing is skipped.
+/// The reference is read upright, at the size the print is sent at, and in
+/// sRGB; a file that is not an image is refused by name.
+@MainActor
+final class ReferenceImageTests: XCTestCase {
+    private func dir() throws -> URL {
+        let d = FileManager.default.temporaryDirectory.appending(path: "spk-ref-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: d) }
+        return d
+    }
+
+    /// Stored 3000×1500, left half red and right half blue, tagged
+    /// orientation 6 (turn 90° clockwise to show): upright it is 1500×3000
+    /// with the red half on top.
+    func testAReferenceIsReadUprightAtTheSentSize() throws {
+        let w = 3000, h = 1500
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        ctx.setFillColor(CGColor(srgbRed: 0.9, green: 0.1, blue: 0.1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: w / 2, height: h))
+        ctx.setFillColor(CGColor(srgbRed: 0.1, green: 0.1, blue: 0.9, alpha: 1))
+        ctx.fill(CGRect(x: w / 2, y: 0, width: w / 2, height: h))
+        let url = try dir().appending(path: "turned.jpg")
+        let dest = try XCTUnwrap(CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(dest, try XCTUnwrap(ctx.makeImage()),
+                                   [kCGImagePropertyOrientation: 6] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(dest))
+
+        let r = try ReferenceImage.load(url)
+        XCTAssertEqual(r.name, "turned.jpg")
+        XCTAssertEqual(max(r.image.width, r.image.height), AISettings.sentLongEdge)
+        XCTAssertGreaterThan(r.image.height, r.image.width, "upright: taller than wide")
+        // Top row red, bottom row blue (CGContext's origin is bottom-left).
+        let top = try XCTUnwrap(r.image.cropping(to: CGRect(x: 0, y: 0, width: r.image.width, height: 8)))
+        let bottom = try XCTUnwrap(r.image.cropping(to: CGRect(x: 0, y: r.image.height - 8, width: r.image.width, height: 8)))
+        XCTAssertGreaterThan(try XCTUnwrap(ImageMetrics(top)).castRG, 0.3, "the red half is on top")
+        XCTAssertLessThan(try XCTUnwrap(ImageMetrics(bottom)).castYB, -0.3, "the blue half is below")
+        XCTAssertFalse(r.jpeg.isEmpty)
+        XCTAssertNotNil(CGImageSourceCreateWithData(r.jpeg as CFData, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) },
+                        "what is sent decodes")
+    }
+
+    func testAFileThatIsNotAnImageIsRefusedByName() throws {
+        let url = try dir().appending(path: "notes.jpg")
+        try Data("not a picture".utf8).write(to: url)
+        XCTAssertThrowsError(try ReferenceImage.load(url)) { error in
+            XCTAssertEqual("\(error)", "notes.jpg could not be read as an image.")
+        }
+    }
+}
+
 @MainActor
 final class AISessionTests: XCTestCase {
 
