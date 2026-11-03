@@ -62,12 +62,13 @@ struct AISection: View {
         PanelSection(L("Choose a Film", zh: "AI 选片"), key: "ai.choose") {
             RailRows {
                 intentField
+                referenceRow
                 Toggle(L("Include black and white", zh: "包含黑白胶片"), isOn: $assistant.includeMonochrome)
                     .toggleStyle(.checkbox).font(Theme.Font.caption).foregroundStyle(Theme.secondaryText)
                 HStack(spacing: 8) {
                     pill(L("Recommend", zh: "推荐胶片"),
-                         help: L("Print this frame on every colour film, then ask the model which suit it.",
-                                 zh: "用每款彩色胶片各冲印一张小样，再请模型判断哪款适合这张照片。"),
+                         help: L("Print this frame on every colour film, then ask the model which suit it — with a reference, which come closest to it. Uses the intent and reference above.",
+                                 zh: "用每款彩色胶片各冲印一张小样，再请模型判断哪款适合这张照片；选了参考图时，判断哪款最接近参考图。使用上面填写的意图和参考图。"),
                          enabled: hasFrame && !assistant.busy) { assistant.recommendFilm() }
                     if assistant.busy { pill(L("Stop", zh: "停止"), help: "", enabled: true) { assistant.cancel() } }
                 }
@@ -79,7 +80,7 @@ struct AISection: View {
                     if !rec.summary.isEmpty { Text(rec.summary).font(Theme.Font.caption).foregroundStyle(Theme.text)
                         .fixedSize(horizontal: false, vertical: true) }
                     ForEach(rec.picks) { pick in pickRow(pick) }
-                    caption(L("\(rec.compared) films compared on one neutral print.", zh: "在同一中性冲印下比较了 \(rec.compared) 款胶片。"))
+                    caption(Self.comparedLine(rec))
                 }
             }
         }
@@ -124,6 +125,18 @@ struct AISection: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// What the ranking was made against, said under it.
+    static func comparedLine(_ rec: AIAssistant.Recommendation) -> String {
+        var line = rec.filmDistances == nil
+            ? L("\(rec.compared) films compared on one neutral print.", zh: "在同一中性冲印下比较了 \(rec.compared) 款胶片。")
+            : L("\(rec.compared) films compared on one neutral print, against the reference.",
+                zh: "在同一中性冲印下，按参考图比较了 \(rec.compared) 款胶片。")
+        if rec.addedMonochrome {
+            line += L(" Black and white was included: the reference has no colour.", zh: "参考图是黑白的，所以也比较了黑白胶片。")
+        }
+        return line
     }
 
     // MARK: compose
@@ -188,10 +201,9 @@ struct AISection: View {
             RailRows {
                 caption(L("The model looks at the print and moves this frame's own controls — exposure, the enlarger's filters, Scene Placement and Post-Dev — up to \(AIAssistant.maxRounds) rounds. The film and paper stay.",
                           zh: "模型查看成片后调整这张照片自己的参数：曝光、放大机滤色、场景置位和显影后调色，最多 \(AIAssistant.maxRounds) 轮。胶片和相纸不变。"))
-                referenceRow
                 HStack(spacing: 8) {
                     pill(L("Refine", zh: "开始精修"),
-                         help: L("Uses the intent above.", zh: "使用上面填写的意图。"),
+                         help: L("Uses the intent and reference above.", zh: "使用上面填写的意图和参考图。"),
                          enabled: hasFrame && !assistant.busy) { assistant.refine() }
                     pill(L("Undo AI changes", zh: "撤销 AI 修改"),
                          help: L("Put the edit back as it was before the first AI change on this frame, as one step.",
@@ -239,8 +251,8 @@ struct AISection: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(r.name).font(Theme.Font.label).foregroundStyle(Theme.text)
                             .lineLimit(1).truncationMode(.middle)
-                        caption(L("Refine brings the print's colour, density and contrast toward it, as far as this film allows.",
-                                  zh: "精修会把成片的色调、密度和反差往它靠，在当前胶片能做到的范围内。"))
+                        caption(L("Recommend ranks the films closest to it; Refine brings the print's colour, density and contrast toward it, as far as the film allows.",
+                                  zh: "推荐胶片会优先挑最接近它的胶片；精修会把成片的色调、密度和反差往它靠，在胶片能做到的范围内。"))
                         HStack(spacing: 8) {
                             pill(L("Change…", zh: "更换…"), help: "", enabled: !assistant.busy) { pickReference() }
                             pill(L("Remove", zh: "移除"), help: "", enabled: !assistant.busy) { assistant.reference = nil }
