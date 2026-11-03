@@ -388,6 +388,7 @@
 		};
 		701C800DBBB33B39A15D78A5 /* AgentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AgentTests.swift"; sourceTree = "<group>"; };
 		DAED440DF373C1C3AFD3E66C /* AIEval.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIEval.swift"; sourceTree = "<group>"; };
+		B385A2529AB42A4AD661DE92 /* AIEvalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIEvalTests.swift"; sourceTree = "<group>"; };
 		F2007A617520C07A1588D559 /* AITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AITests.swift"; sourceTree = "<group>"; };
 		52AA7B49AA76968939624751 /* CachePolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CachePolicyTests.swift"; sourceTree = "<group>"; };
 		5F3A463963EF5A09D20AC677 /* CanvasViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CanvasViewTests.swift"; sourceTree = "<group>"; };
@@ -455,6 +456,7 @@
 			children = (
 				701C800DBBB33B39A15D78A5 /* AgentTests.swift */,
 				DAED440DF373C1C3AFD3E66C /* AIEval.swift */,
+				B385A2529AB42A4AD661DE92 /* AIEvalTests.swift */,
 				F2007A617520C07A1588D559 /* AITests.swift */,
 				52AA7B49AA76968939624751 /* CachePolicyTests.swift */,
 				5F3A463963EF5A09D20AC677 /* CanvasViewTests.swift */,
@@ -947,6 +949,7 @@
 		};
 		D9C3C8DCFE21EC997B8F9448 /* AgentTests.swift */ = {isa = PBXBuildFile; fileRef = 701C800DBBB33B39A15D78A5; };
 		DC023369E60FC83E129D8570 /* AIEval.swift */ = {isa = PBXBuildFile; fileRef = DAED440DF373C1C3AFD3E66C; };
+		AC9AA666B38614A63DA2E1D7 /* AIEvalTests.swift */ = {isa = PBXBuildFile; fileRef = B385A2529AB42A4AD661DE92; };
 		862C95A84ED86DC2C497F381 /* AITests.swift */ = {isa = PBXBuildFile; fileRef = F2007A617520C07A1588D559; };
 		0475C190194643CFAEE4F9BD /* CachePolicyTests.swift */ = {isa = PBXBuildFile; fileRef = 52AA7B49AA76968939624751; };
 		5E11C56528BFC0565D351F2E /* CanvasViewTests.swift */ = {isa = PBXBuildFile; fileRef = 5F3A463963EF5A09D20AC677; };
@@ -1158,6 +1161,7 @@
 			files = (
 				D9C3C8DCFE21EC997B8F9448 /* AgentTests.swift */,
 				DC023369E60FC83E129D8570 /* AIEval.swift */,
+				AC9AA666B38614A63DA2E1D7 /* AIEvalTests.swift */,
 				862C95A84ED86DC2C497F381 /* AITests.swift */,
 				0475C190194643CFAEE4F9BD /* CachePolicyTests.swift */,
 				5E11C56528BFC0565D351F2E /* CanvasViewTests.swift */,

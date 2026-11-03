@@ -1395,6 +1395,51 @@ final class AISessionTests: XCTestCase {
         XCTAssertEqual(applied.castYB, expected.castYB, accuracy: 0.005, "and solved its pack, not the one before")
     }
 
+    /// **The evaluation, end to end, without a model.** Two cases on the
+    /// synthetic frame — Refine toward its own print, and Choose then Refine
+    /// — through `AIEvalRunner` with the scripted model: every run recorded
+    /// with its distances, the film's place among the proofs, the three files
+    /// written, and the table holding a baseline against them.
+    func testTheEvaluationRecordsEveryRunAndWritesItsFiles() async throws {
+        let url = try syntheticFrame()
+        let dir = url.deletingLastPathComponent()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        try await ws.process()
+        let own = try await ws.preview(to: dir.appending(path: "own.jpg"), longEdge: 1024)
+        let manifest = AIEvalManifest(runs: 1, cases: [
+            .init(name: "own", photo: url.path, reference: own.path, intent: nil, modes: [.refine]),
+            .init(name: "chosen", photo: url.path, reference: own.path, intent: nil, modes: [.chooseRefine]),
+        ])
+        try manifest.validate()
+        let script = Script([
+            ["rationale": "", "patch_json": "{}", "placement": .null, "done": true],
+            ["meter": "balanced", "reason": "even"],
+            ["summary": "s", "ranking": [["index": 2, "score": 90, "reason": "r"]]],
+        ])
+        let out = dir.appending(path: "eval")
+        let results = try await AIEvalRunner.run(manifest, manifestPath: "test", out: out, model: "scripted", base: "none",
+                                                 makeClient: { AIClient(kind: .anthropic, model: "claude-opus-5-5", baseURL: "",
+                                                                        apiKey: "k", transport: script) })
+        XCTAssertEqual(results.records.count, 2)
+        for r in results.records { XCTAssertNil(r.error, "\(r.caseName): \(r.error ?? "")") }
+        let own0 = results.records[0], chosen = results.records[1]
+        XCTAssertEqual(own0.start ?? 99, 0, accuracy: 0.05, "its own print is at the reference")
+        XCTAssertEqual(own0.rounds, 1)
+        XCTAssertNotNil(own0.gaps)
+        let film = try XCTUnwrap(chosen.film, "the choice is recorded")
+        XCTAssertNotEqual(film.pick, "kodak_portra_400", "tile 2, not the film it had")
+        XCTAssertTrue((1...film.of).contains(film.rank))
+        XCTAssertNotNil(chosen.chosen)
+        XCTAssertGreaterThan(chosen.chosen ?? 0, 0.05, "another film is away from a reference printed on Portra")
+        for f in ["results.json", "summary.md", "sheet.jpg", "chosen/choose+refine-1/chosen.jpg", "own/refine-1/after.jpg"] {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: out.appending(path: f).path), f)
+        }
+        let back = try JSONDecoder().decode(AIEvalResults.self, from: Data(contentsOf: out.appending(path: "results.json")))
+        XCTAssertEqual(back, results, "what is written reads back")
+        XCTAssertTrue(AIEval.markdown(results, baseline: back).contains("Baseline end"))
+    }
+
     /// Applying a negative from a slide film prints it: the film list leaves
     /// `scanFilm` on, and the paper the slide kept may already be the one.
     func testApplyingANegativeAfterASlidePrintsIt() async throws {
@@ -1853,112 +1898,6 @@ final class AIEndToEndTests: XCTestCase {
     }
 }
 
-/// Refine toward a reference on a real model, measured: how far the print's
-/// brightness, contrast, colourfulness and casts are from the reference's
-/// before and after. Opt-in like `AIEndToEndTests`, plus
-/// `SPK_AI_REFERENCE=<picture>`; `SPK_AI_OUT=<folder>` keeps the reference,
-/// the print before and the print after.
-@MainActor
-final class AIReferenceEndToEndTests: XCTestCase {
-    func testRefineTowardAReference() async throws {
-        let env = ProcessInfo.processInfo.environment
-        guard let base = env["SPK_AI_E2E"], let model = env["SPK_AI_MODEL"], let refPath = env["SPK_AI_REFERENCE"] else {
-            throw XCTSkip("SPK_AI_E2E, SPK_AI_MODEL and SPK_AI_REFERENCE are not set")
-        }
-        let source = try XCTUnwrap(env["SPK_AI_IMAGE"].map(URL.init(fileURLWithPath:)), "SPK_AI_IMAGE")
-        let dir = FileManager.default.temporaryDirectory.appending(path: "spk-ai-ref-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
-        let url = dir.appending(path: source.lastPathComponent)
-        try FileManager.default.copyItem(at: source, to: url)
-
-        let saved = (AISettings.enabled, AISettings.provider, AISettings.openAIBaseURL, AISettings.openAIModel,
-                     AISettings.anthropicModel)
-        addTeardownBlock { @MainActor in
-            (AISettings.enabled, AISettings.provider, AISettings.openAIBaseURL, AISettings.openAIModel,
-             AISettings.anthropicModel) = saved
-        }
-        AISettings.enabled = true
-        if base == "anthropic" {
-            try XCTSkipUnless(AIKeychain.has(.anthropic), "no Anthropic key in Settings ▸ AI")
-            AISettings.provider = .anthropic
-            AISettings.anthropicModel = model
-        } else {
-            AISettings.provider = .openAICompatible
-            AISettings.openAIBaseURL = base
-            AISettings.openAIModel = model
-        }
-
-        let ws = AgentWorkspace()
-        try await ws.open(url.path)
-        let s = ws.session
-        try await ws.process()
-        let reference = try ReferenceImage.load(URL(fileURLWithPath: refPath))
-        let out = env["SPK_AI_OUT"].map { URL(fileURLWithPath: $0, isDirectory: true) } ?? dir
-        try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
-        try? ProofSheet.writeJPEG(reference.image, to: out.appending(path: "reference.jpg"))
-
-        func measure(_ name: String) async throws -> ImageMetrics {
-            let file = try await ws.preview(to: out.appending(path: name), longEdge: AISettings.sentLongEdge)
-            return try XCTUnwrap(AIAssistant.metrics(try Data(contentsOf: file)))
-        }
-        func gaps(_ m: ImageMetrics) -> [String: Double] {
-            let r = reference.metrics
-            return ["meanLuma": abs(r.meanLuma - m.meanLuma), "contrast": abs(r.contrast - m.contrast),
-                    "colorfulness": abs(r.colorfulness - m.colorfulness),
-                    "castRG": abs(r.castRG - m.castRG), "castYB": abs(r.castYB - m.castYB)]
-        }
-        let start = try await measure("before.jpg")
-
-        let assistant = AIAssistant(session: s)
-        assistant.makeClient = { try AISettings.client() }
-        assistant.intent = env["SPK_AI_INTENT"] ?? ""
-        assistant.reference = reference
-        let clock = Date()
-        func finish() async throws {
-            try await Task.sleep(for: .milliseconds(50))
-            while assistant.busy {
-                XCTAssertLessThan(Date().timeIntervalSince(clock), 1800, "the assistant did not finish")
-                try await Task.sleep(for: .milliseconds(200))
-            }
-            XCTAssertNil(assistant.error, assistant.error ?? "")
-        }
-        // `SPK_AI_CHOOSE`: choose a film toward the reference and apply the
-        // first pick before refining; prints where that pick stands among
-        // the proofs by film distance, and the current film's (tile 1).
-        if env["SPK_AI_CHOOSE"] != nil {
-            assistant.recommendFilm()
-            try await finish()
-            let rec = try XCTUnwrap(assistant.recommendation)
-            let d = try XCTUnwrap(rec.filmDistances)
-            let pick = try XCTUnwrap(rec.picks.first)
-            let rank = d.filter { $0 < d[pick.index - 1] }.count + 1
-            print(String(format: "REF choose: pick %@ film distance %.2f, rank %d of %d by distance; current film %.2f; best %.2f",
-                         pick.candidate.film, d[pick.index - 1], rank, d.count, d[0], d.min() ?? 0))
-            for p in rec.picks { print("REF pick \(p.index) \(p.candidate.film) \(p.score): \(p.reason)") }
-            assistant.apply(pick)
-            try await ws.settle()
-            let chosen = try await measure("chosen.jpg")
-            print(String(format: "REF distance after choosing: %.2f -> %.2f",
-                         reference.distance(to: start), reference.distance(to: chosen)))
-        }
-        assistant.refine()
-        try await finish()
-        for step in assistant.steps {
-            print("REF round \(step.round): \(step.rationale) | changed \(step.changed) | refused \(step.refused ?? "-")"
-                  + (step.retracted ? " | RETRACTED" : ""))
-        }
-        try await ws.settle()
-        let end = try await measure("after.jpg")
-        let a = gaps(start), b = gaps(end)
-        for k in a.keys.sorted() { print(String(format: "REF gap %@: %.3f -> %.3f", k, a[k]!, b[k]!)) }
-        print(String(format: "REF distance: %.2f -> %.2f", reference.distance(to: start), reference.distance(to: end)))
-        XCTAssertLessThanOrEqual(reference.distance(to: end), reference.distance(to: start) + 0.25,
-                                 "a run toward a reference does not end further from it")
-        print(String(format: "REF seconds: %.0f", Date().timeIntervalSince(clock)))
-        XCTAssertFalse(assistant.steps.isEmpty)
-    }
-}
 
 
 /// Skin smoothing on a real portrait: faces found, the frame re-developed,
