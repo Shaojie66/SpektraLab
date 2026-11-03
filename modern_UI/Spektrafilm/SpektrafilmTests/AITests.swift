@@ -343,6 +343,43 @@ final class AIUnitTests: XCTestCase {
         XCTAssertEqual(gap?["castYB"]?.number ?? 0, warm.castYB - grey.castYB, accuracy: 1e-3)
     }
 
+    /// With a reference the chooser is told what it is for and each tile's
+    /// film distance; without one, nothing about a reference is said.
+    func testTheChooserIsToldWhatAReferenceIsAndHowFarEachFilmIs() throws {
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        let image = try XCTUnwrap(ctx.makeImage())
+        func px(_ r: UInt8, _ g: UInt8, _ b: UInt8) -> ImageMetrics {
+            let a = [UInt8](repeating: 0, count: 16).enumerated().map { [r, g, b, 255][$0.offset % 4] }
+            return a.withUnsafeBufferPointer { ImageMetrics(rgba: $0) }
+        }
+        let proofs = [
+            ProofSheet.Proof(index: 1, candidate: ProofCandidate(film: "kodak_portra_400", paper: "kodak_portra_endura"),
+                             image: image, metrics: px(128, 128, 128), latitude: nil),
+            ProofSheet.Proof(index: 2, candidate: ProofCandidate(film: "fujifilm_velvia_100", paper: nil),
+                             image: image, metrics: px(220, 60, 40), latitude: nil),
+        ]
+        let reference = ReferenceImage(name: "r.jpg", image: image, jpeg: Data(), metrics: px(130, 126, 120))
+        let none = AIPrompts.chooserUser(proofs: proofs, catalog: .shared, exif: nil, intent: "")
+        XCTAssertFalse(none.lowercased().contains("reference"), none)
+        XCTAssertFalse(none.contains("film distance"))
+
+        let told = AIPrompts.chooserUser(proofs: proofs, catalog: .shared, exif: nil, intent: "", reference: reference)
+        XCTAssertTrue(told.contains("after \"Reference:\""))
+        XCTAssertTrue(told.contains("after \"Contact sheet:\""))
+        XCTAssertTrue(told.contains("do not rule a film out for those"), "brightness and cast are Refine's")
+        XCTAssertTrue(told.contains("the intent wins"))
+        let rows = told.split(separator: "\n").filter { $0.hasPrefix("1. ") || $0.hasPrefix("2. ") }
+        XCTAssertEqual(rows.count, 2)
+        func distance(_ row: Substring) -> Double? {
+            row.range(of: "film distance ").flatMap { Double(row[$0.upperBound...].prefix { $0 == "." || $0.isNumber }) }
+        }
+        let near = try XCTUnwrap(distance(rows[0])), far = try XCTUnwrap(distance(rows[1]))
+        XCTAssertEqual(near, reference.filmDistance(to: proofs[0].metrics), accuracy: 0.01)
+        XCTAssertLessThan(near, far, "the neutral tile is nearer a near-neutral reference")
+    }
+
     // MARK: which films
 
     func testTheDefaultCandidatesAreFairAndPrintable() {
@@ -1429,6 +1466,66 @@ final class AISessionTests: XCTestCase {
         XCTAssertEqual(assistant.exposureChoice?.byAI, false)
     }
 
+    /// With a reference, the films' request carries it labelled ahead of the
+    /// sheet and the exposure's does not — the meter is the scene's; each
+    /// proof's film distance is kept. A grey reference brings black and white
+    /// in by itself.
+    func testRecommendWithAReferenceSendsItWithTheFilmsOnly() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        let s = ws.session
+        func run(_ reference: ReferenceImage?) async throws -> (Script, AIAssistant.Recommendation) {
+            let script = Script([
+                ["meter": "balanced", "reason": "even light"],
+                ["summary": "s", "ranking": [["index": 1, "score": 90, "reason": "r"]]],
+            ])
+            let assistant = AIAssistant(session: s)
+            assistant.makeClient = { AIClient(kind: .anthropic, model: "claude-opus-5-5", baseURL: "", apiKey: "k", transport: script) }
+            assistant.reference = reference
+            assistant.recommendFilm()
+            try await Task.sleep(for: .milliseconds(50))
+            while assistant.busy { try await Task.sleep(for: .milliseconds(100)) }
+            XCTAssertNil(assistant.error, assistant.error ?? "")
+            return (script, try XCTUnwrap(assistant.recommendation))
+        }
+        func types(_ body: JSONValue?) -> [String] {
+            guard case .array(let messages)? = body?["messages"], case .array(let blocks)? = messages.first?["content"]
+            else { return [] }
+            return blocks.map { $0["type"]?.string ?? "" }
+        }
+
+        let (bare, plain) = try await run(nil)
+        XCTAssertEqual(types(bare.sent.last), ["image", "text"], "no reference, no change to the request")
+        XCTAssertNil(plain.filmDistances)
+
+        let colour = try ReferenceImage.load(url)
+        XCTAssertFalse(colour.isMonochrome)
+        let (sent, rec) = try await run(colour)
+        XCTAssertEqual(sent.sent.count, 2)
+        XCTAssertEqual(types(sent.sent[0]), ["image", "text"], "the exposure is chosen without the reference")
+        XCTAssertEqual(types(sent.sent[1]), ["text", "image", "text", "image", "text"])
+        XCTAssertEqual(rec.filmDistances?.count, rec.compared)
+        XCTAssertFalse(rec.addedMonochrome)
+        XCTAssertEqual(rec.compared, plain.compared)
+
+        let greyURL = url.deletingLastPathComponent().appending(path: "grey.png")
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 64, height: 64, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        for x in 0..<64 {
+            ctx.setFillColor(CGColor(srgbRed: CGFloat(x) / 63, green: CGFloat(x) / 63, blue: CGFloat(x) / 63, alpha: 1))
+            ctx.fill(CGRect(x: x, y: 0, width: 1, height: 64))
+        }
+        let dest = try XCTUnwrap(CGImageDestinationCreateWithURL(greyURL as CFURL, UTType.png.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(dest, try XCTUnwrap(ctx.makeImage()), nil)
+        XCTAssertTrue(CGImageDestinationFinalize(dest))
+        let (_, mono) = try await run(try ReferenceImage.load(greyURL))
+        XCTAssertTrue(mono.addedMonochrome)
+        XCTAssertGreaterThan(mono.compared, plain.compared, "black and white is among the films")
+        XCTAssertTrue(AISection.comparedLine(mono).contains("Black and white") || AISection.comparedLine(mono).contains("黑白"))
+    }
+
     /// Recommend crops, Apply one, and Undo AI changes puts the framing back.
     func testRecommendingAndApplyingACrop() async throws {
         let url = try syntheticFrame()
@@ -1776,13 +1873,35 @@ final class AIReferenceEndToEndTests: XCTestCase {
         assistant.intent = env["SPK_AI_INTENT"] ?? ""
         assistant.reference = reference
         let clock = Date()
-        assistant.refine()
-        try await Task.sleep(for: .milliseconds(50))
-        while assistant.busy {
-            XCTAssertLessThan(Date().timeIntervalSince(clock), 1800, "the assistant did not finish")
-            try await Task.sleep(for: .milliseconds(200))
+        func finish() async throws {
+            try await Task.sleep(for: .milliseconds(50))
+            while assistant.busy {
+                XCTAssertLessThan(Date().timeIntervalSince(clock), 1800, "the assistant did not finish")
+                try await Task.sleep(for: .milliseconds(200))
+            }
+            XCTAssertNil(assistant.error, assistant.error ?? "")
         }
-        XCTAssertNil(assistant.error, assistant.error ?? "")
+        // `SPK_AI_CHOOSE`: choose a film toward the reference and apply the
+        // first pick before refining; prints where that pick stands among
+        // the proofs by film distance, and the current film's (tile 1).
+        if env["SPK_AI_CHOOSE"] != nil {
+            assistant.recommendFilm()
+            try await finish()
+            let rec = try XCTUnwrap(assistant.recommendation)
+            let d = try XCTUnwrap(rec.filmDistances)
+            let pick = try XCTUnwrap(rec.picks.first)
+            let rank = d.filter { $0 < d[pick.index - 1] }.count + 1
+            print(String(format: "REF choose: pick %@ film distance %.2f, rank %d of %d by distance; current film %.2f; best %.2f",
+                         pick.candidate.film, d[pick.index - 1], rank, d.count, d[0], d.min() ?? 0))
+            for p in rec.picks { print("REF pick \(p.index) \(p.candidate.film) \(p.score): \(p.reason)") }
+            assistant.apply(pick)
+            try await ws.settle()
+            let chosen = try await measure("chosen.jpg")
+            print(String(format: "REF distance after choosing: %.2f -> %.2f",
+                         reference.distance(to: start), reference.distance(to: chosen)))
+        }
+        assistant.refine()
+        try await finish()
         for step in assistant.steps {
             print("REF round \(step.round): \(step.rationale) | changed \(step.changed) | refused \(step.refused ?? "-")"
                   + (step.retracted ? " | RETRACTED" : ""))

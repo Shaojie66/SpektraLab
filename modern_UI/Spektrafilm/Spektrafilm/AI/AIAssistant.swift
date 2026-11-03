@@ -44,6 +44,11 @@ final class AIAssistant {
         let summary: String
         let picks: [Pick]
         let compared: Int
+        /// Each proof's `ReferenceImage.filmDistance`, by tile number less
+        /// one; nil when no reference was chosen.
+        var filmDistances: [Double]? = nil
+        /// Black and white was added because the reference has no colour.
+        var addedMonochrome = false
     }
 
     struct Step: Identifiable {
@@ -140,10 +145,14 @@ final class AIAssistant {
             let catalog = session.catalog
             guard let url = session.selection else { throw ProofSheet.Failure.nothingOpen }
             guard session.pair == nil else { throw ProofSheet.Failure.pair }
+            // The one chosen when Recommend was pressed. The exposure is the
+            // scene's and is chosen without it.
+            let reference = self.reference
             try await chooseExposure(client: client, url: url)
             try Task.checkCancellation()
+            let addedMonochrome = !includeMonochrome && reference?.isMonochrome == true
             let candidates = ProofSheet.defaultCandidates(catalog: catalog, current: session.params,
-                                                          includeMonochrome: includeMonochrome)
+                                                          includeMonochrome: includeMonochrome || addedMonochrome)
             phase = .proofing(done: 0, total: candidates.count)
             let proofs = try await ProofSheet.render(session: session, candidates: candidates,
                                                      longEdge: Self.proofLongEdge) { [weak self] done, total in
@@ -152,11 +161,13 @@ final class AIAssistant {
             guard let sheet = ProofSheet.contactSheet(proofs, catalog: catalog),
                   let jpeg = Self.jpeg(sheet) else { throw ProofSheet.Failure.noPixels("contact sheet") }
             phase = .asking
+            let user = AIPrompts.chooserUser(proofs: proofs, catalog: catalog, exif: session.exif, intent: intent,
+                                             reference: reference)
+            let parts: [AIRequest.Part] = reference.map {
+                [.text("Reference:"), .jpeg($0.jpeg), .text("Contact sheet:"), .jpeg(jpeg), .text(user)]
+            } ?? [.jpeg(jpeg), .text(user)]
             let answer = try await client.complete(AIRequest(
-                system: AIPrompts.chooserSystem,
-                parts: [.jpeg(jpeg), .text(AIPrompts.chooserUser(proofs: proofs, catalog: catalog,
-                                                                 exif: session.exif, intent: intent))],
-                schema: AIPrompts.chooserSchema))
+                system: AIPrompts.chooserSystem, parts: parts, schema: AIPrompts.chooserSchema))
             try Task.checkCancellation()
             let (summary, ranked) = try AIPrompts.readRanking(answer, count: proofs.count)
             let picks = ranked.map { r in
@@ -164,7 +175,9 @@ final class AIAssistant {
                 return Pick(index: r.index, candidate: p.candidate, score: r.score, reason: r.reason, thumbnail: p.image)
             }
             guard session.selection == url else { return }
-            recommendation = Recommendation(url: url, summary: summary, picks: picks, compared: proofs.count)
+            recommendation = Recommendation(url: url, summary: summary, picks: picks, compared: proofs.count,
+                                            filmDistances: reference.map { r in proofs.map { r.filmDistance(to: $0.metrics) } },
+                                            addedMonochrome: addedMonochrome)
         }
     }
 

@@ -175,16 +175,33 @@ enum AIPrompts {
         ],
     ]
 
-    static func chooserUser(proofs: [ProofSheet.Proof], catalog: StockCatalog, exif: EXIFReadout?, intent: String) -> String {
-        var lines = ["The contact sheet above. Measurements per tile (clip = fraction of pixels; luma, contrast 0–1; "
+    static func chooserUser(proofs: [ProofSheet.Proof], catalog: StockCatalog, exif: EXIFReadout?, intent: String,
+                            reference: ReferenceImage? = nil) -> String {
+        var lines: [String] = []
+        if let reference {
+            lines += [
+                "The first image, after \"Reference:\", is a picture the person wants this photograph to look like; the "
+                + "second, after \"Contact sheet:\", is the sheet. Rank first the films whose own rendering comes closest "
+                + "to the reference's look: saturation, contrast, palette, and how skin, foliage and sky are rendered. "
+                + "Not its subject, framing or content. Overall brightness and an overall cast are set afterwards by "
+                + "Refine (print brightness and the enlarger's filters), so do not rule a film out for those; what "
+                + "Refine cannot change is the film's own saturation, contrast and palette. If the intent says "
+                + "otherwise, the intent wins.",
+                "Measured on the reference: " + reference.metrics.json.text(),
+                "Each tile's \"film distance\" below is how far its contrast and colourfulness are from the reference's "
+                + "(lower is closer). They are whole-frame averages: judge skin, sky and foliage by looking.",
+            ]
+        }
+        lines.append("The contact sheet above. Measurements per tile (clip = fraction of pixels; luma, contrast 0–1; "
                      + "colourfulness: ~15 muted, ~45 moderate, >80 vivid; cast: + is magenta/warm, − green/cool; "
-                     + "within = fraction of the scene the film and paper hold):"]
+                     + "within = fraction of the scene the film and paper hold):")
         for p in proofs {
             let m = p.metrics
             var row = "\(p.index). \(p.candidate.name(in: catalog)) — highlight clip \(pct(m.highlightClip)), "
                 + "shadow clip \(pct(m.shadowClip)), luma \(f(m.meanLuma)), contrast \(f(m.contrast)), "
                 + "colourfulness \(String(format: "%.0f", m.colorfulness)), cast RG \(signed(m.castRG)) YB \(signed(m.castYB))"
             if let l = p.latitude { row += ", within \(pct(l.within))" }
+            if let reference { row += String(format: ", film distance %.2f", reference.filmDistance(to: m)) }
             lines.append(row)
         }
         lines.append(shot(exif))
