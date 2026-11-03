@@ -1,0 +1,11 @@
+{
+  "runs": 3,
+  "cases": [
+    { "name": "warm-portrait", "photo": "/path/to/fivek/a0269.dng", "reference": "refs/ref-warm.jpg",
+      "modes": ["refine", "choose+refine"] },
+    { "name": "cool-night", "photo": "/path/to/fivek/a4796.dng", "reference": "refs/ref-cool.jpg",
+      "modes": ["refine", "choose+refine"] },
+    { "name": "muted-landscape", "photo": "/path/to/fivek/a1839.dng", "reference": "refs/ref-muted.jpg",
+      "modes": ["refine", "choose+refine"] }
+  ]
+}

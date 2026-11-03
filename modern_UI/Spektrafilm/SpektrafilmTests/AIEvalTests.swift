@@ -182,7 +182,8 @@ enum AIEvalRunner {
 @MainActor
 final class AIEvalTests: XCTestCase {
     func testEvaluate() async throws {
-        let env = ProcessInfo.processInfo.environment
+        // An empty variable is an unset one: a script passes them through.
+        let env = ProcessInfo.processInfo.environment.filter { !$0.value.isEmpty }
         guard let base = env["SPK_AI_E2E"], let model = env["SPK_AI_MODEL"] else {
             throw XCTSkip("SPK_AI_E2E and SPK_AI_MODEL are not set")
         }
