@@ -21,6 +21,16 @@ struct ReferenceImage: Sendable {
     let jpeg: Data
     let metrics: ImageMetrics
 
+    /// How far a print looks from this reference: each measured gap over
+    /// the size of a difference one sees side by side, summed. Lower is
+    /// closer, 0 is the same numbers. What Refine keeps a round by.
+    func distance(to print: ImageMetrics) -> Double {
+        let r = metrics
+        return abs(r.meanLuma - print.meanLuma) / 0.05 + abs(r.contrast - print.contrast) / 0.03
+            + abs(r.colorfulness - print.colorfulness) / 8
+            + abs(r.castRG - print.castRG) / 0.02 + abs(r.castYB - print.castYB) / 0.02
+    }
+
     enum Failure: Error, CustomStringConvertible {
         case unreadable(String)
         var description: String {

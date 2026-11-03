@@ -332,6 +332,8 @@ final class AIUnitTests: XCTestCase {
         XCTAssertTrue(told.contains("the intent wins"))
         XCTAssertTrue(told.contains("Measured on the reference: "))
         XCTAssertTrue(told.contains("Measured on this print: "))
+        XCTAssertTrue(told.contains("Match brightness with params.printBrightnessStops"), "brightness by the print, not the negative")
+        XCTAssertFalse(user(nil, nil).contains("printBrightnessStops (positive"), "and only with a reference")
         // Warm reference over a neutral print: castYB's gap is positive.
         let head = "Reference minus print (positive: the reference has more): "
         let gap = told.range(of: head).flatMap { start in
@@ -1003,6 +1005,25 @@ final class ReferenceImageTests: XCTestCase {
                         "what is sent decodes")
     }
 
+    /// The distance is 0 for the same numbers and grows with every gap.
+    func testTheDistanceToAReferenceIsZeroForItselfAndGrowsWithAGap() throws {
+        let url = try dir().appending(path: "grey.png")
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 64, height: 64, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        ctx.setFillColor(CGColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+        let dest = try XCTUnwrap(CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(dest, try XCTUnwrap(ctx.makeImage()), nil)
+        XCTAssertTrue(CGImageDestinationFinalize(dest))
+        let r = try ReferenceImage.load(url)
+        XCTAssertEqual(r.distance(to: r.metrics), 0, accuracy: 1e-9)
+        var warmer = r.metrics; warmer.castYB += 0.02
+        var warmerAndDarker = warmer; warmerAndDarker.meanLuma -= 0.05
+        XCTAssertEqual(r.distance(to: warmer), 1, accuracy: 1e-9, "a 0.02 cast is one step")
+        XCTAssertGreaterThan(r.distance(to: warmerAndDarker), r.distance(to: warmer))
+    }
+
     func testAFileThatIsNotAnImageIsRefusedByName() throws {
         let url = try dir().appending(path: "notes.jpg")
         try Data("not a picture".utf8).write(to: url)
@@ -1231,6 +1252,42 @@ final class AISessionTests: XCTestCase {
         guard case .array(let messages)? = bare.sent.first?["messages"], case .array(let blocks)? = messages.first?["content"]
         else { return XCTFail("no request") }
         XCTAssertEqual(blocks.map { $0["type"]?.string ?? "" }, ["image", "text"], "no reference, no change to the request")
+    }
+
+    /// A round that takes the print further from the reference is taken
+    /// back, marked, and said to the next round; the run ends at the closest
+    /// print. The reference here is the frame's own print, so any cast moves
+    /// away from it.
+    func testARoundThatMovesAwayFromTheReferenceIsTakenBack() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        try await ws.process()
+        let s = ws.session
+        let own = try await ws.preview(longEdge: 1024)
+        defer { try? FileManager.default.removeItem(at: own) }
+        let script = Script([
+            ["rationale": "far", "patch_json": "{\"params\":{\"yFilterShift\":0.8}}", "placement": .null, "done": false],
+            ["rationale": "nothing", "patch_json": "{}", "placement": .null, "done": true],
+        ])
+        let assistant = AIAssistant(session: s)
+        assistant.makeClient = { AIClient(kind: .anthropic, model: "claude-opus-5-5", baseURL: "", apiKey: "k", transport: script) }
+        assistant.reference = try ReferenceImage.load(own)
+
+        assistant.refine()
+        try await Task.sleep(for: .milliseconds(50))
+        while assistant.busy { try await Task.sleep(for: .milliseconds(100)) }
+
+        XCTAssertNil(assistant.error, assistant.error ?? "")
+        XCTAssertEqual(assistant.steps.count, 2)
+        XCTAssertTrue(assistant.steps[0].retracted, "the cast took it away from the reference")
+        XCTAssertFalse(assistant.steps[1].retracted)
+        XCTAssertEqual(s.params.yFilterShift, 0, accuracy: 1e-9, "and is not in the edit")
+        guard case .array(let messages)? = script.sent.last?["messages"], case .array(let blocks)? = messages.first?["content"]
+        else { return XCTFail("no second request") }
+        let text = blocks.last?["text"]?.string ?? ""
+        XCTAssertTrue(text.contains("so it was taken back"), text)
+        XCTAssertTrue(text.contains("Taken back: it moved the print away"), "the history says so too")
     }
 
     /// Applying a negative from a slide film prints it: the film list leaves
@@ -1701,12 +1758,16 @@ final class AIReferenceEndToEndTests: XCTestCase {
         }
         XCTAssertNil(assistant.error, assistant.error ?? "")
         for step in assistant.steps {
-            print("REF round \(step.round): \(step.rationale) | changed \(step.changed) | refused \(step.refused ?? "-")")
+            print("REF round \(step.round): \(step.rationale) | changed \(step.changed) | refused \(step.refused ?? "-")"
+                  + (step.retracted ? " | RETRACTED" : ""))
         }
         try await ws.settle()
         let end = try await measure("after.jpg")
         let a = gaps(start), b = gaps(end)
         for k in a.keys.sorted() { print(String(format: "REF gap %@: %.3f -> %.3f", k, a[k]!, b[k]!)) }
+        print(String(format: "REF distance: %.2f -> %.2f", reference.distance(to: start), reference.distance(to: end)))
+        XCTAssertLessThanOrEqual(reference.distance(to: end), reference.distance(to: start) + 0.25,
+                                 "a run toward a reference does not end further from it")
         print(String(format: "REF seconds: %.0f", Date().timeIntervalSince(clock)))
         XCTAssertFalse(assistant.steps.isEmpty)
     }

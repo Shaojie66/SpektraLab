@@ -287,10 +287,19 @@ enum AIPrompts {
     static func refinerUser(document: JSONValue, latitude: JSONValue?, film: String?, exif: EXIFReadout?,
                             intent: String, history: [AIAssistant.Step], feedback: String?,
                             round: Int, of total: Int, faces: SkinMask? = nil, noFilm: Bool = false,
-                            reference: ImageMetrics? = nil, print: ImageMetrics? = nil) -> String {
+                            reference: ImageMetrics? = nil, print: ImageMetrics? = nil,
+                            distance: Double? = nil, retracted: (from: Double, to: Double)? = nil) -> String {
         var lines = ["The print above, round \(round) of \(total). Film: \(film ?? "?")."]
         if let reference {
             lines += referenceLines(reference, print: print)
+            if let distance {
+                lines.append(String(format: "Distance from the reference, all gaps together: %.2f (lower is closer).", distance))
+            }
+            if let retracted {
+                lines.append(String(format: "Your last round took the print further from the reference (%.2f → %.2f), "
+                                    + "so it was taken back: the print above is the closest one so far. Try a different move — "
+                                    + "smaller, or on other fields.", retracted.from, retracted.to))
+            }
         }
         if noFilm {
             lines.append("The film simulation is off for this frame, and skin smoothing is done before the film, "
@@ -335,7 +344,8 @@ enum AIPrompts {
             lines.append("Earlier rounds:")
             for s in history {
                 lines.append("- round \(s.round): \(s.rationale) Changed: \(s.changed.isEmpty ? "nothing" : s.changed.joined(separator: ", "))."
-                             + (s.refused.map { " Refused: \($0)" } ?? ""))
+                             + (s.refused.map { " Refused: \($0)" } ?? "")
+                             + (s.retracted ? " Taken back: it moved the print away from the reference." : ""))
             }
         }
         if let feedback { lines.append("Your last patch was refused, so it was not applied: \(feedback) Fix it this round.") }
@@ -418,6 +428,11 @@ enum AIPrompts {
             + "Not its subject, framing or content — it may be another scene, another film or a digital photograph. "
             + "Get as close as the fields allow and stop there: what only another film could give, leave; keep skin "
             + "and neutral greys believable. If the intent says otherwise, the intent wins.",
+            "Match brightness with params.printBrightnessStops (positive prints brighter): it moves the whole "
+            + "print lighter or darker. Film Exposure (exposureCompensationEV) and the meter change where the scene sits "
+            + "on the film's curve — its contrast and the colour in the toe and shoulder — far more than the print's "
+            + "brightness, and Scene Placement is for a scene the medium cannot hold, not for brightness. Go by the "
+            + "numbers below, not by eye: a positive meanLuma gap means the print must get lighter, a negative one darker.",
             "Measured on the reference: " + reference.json.text(),
         ]
         if let print {

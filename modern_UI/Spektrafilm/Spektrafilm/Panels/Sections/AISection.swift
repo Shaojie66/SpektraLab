@@ -211,6 +211,11 @@ struct AISection: View {
                                 .font(.system(size: 9, design: .monospaced)).foregroundStyle(Theme.dim)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        if step.retracted {
+                            Text(L("Taken back: it moved the print further from the reference.",
+                                   zh: "已撤回：这一轮让成片离参考图更远了。"))
+                                .font(Theme.Font.caption).foregroundStyle(Theme.accent).fixedSize(horizontal: false, vertical: true)
+                        }
                         if let r = step.refused {
                             Text(L("Not applied: \(r)", zh: "未应用：\(r)")).font(Theme.Font.caption)
                                 .foregroundStyle(Theme.accent).fixedSize(horizontal: false, vertical: true)

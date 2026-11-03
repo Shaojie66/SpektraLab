@@ -53,6 +53,8 @@ final class AIAssistant {
         let changed: [String]
         /// Why some or all of the round was not applied.
         let refused: String?
+        /// Taken back because it left the print further from the reference.
+        var retracted = false
         var id: Int { round }
     }
 
@@ -99,6 +101,11 @@ final class AIAssistant {
     var makeClient: () throws -> AIClient = AISettings.client
 
     static let maxRounds = 3
+    /// How much further from the reference a round must leave the print to be
+    /// taken back, in `ReferenceImage.distance` steps: the same edit printed
+    /// twice does not measure exactly the same, and that is not a round
+    /// going wrong.
+    static let retractionMargin = 0.15
     /// Proofs for a recommendation are smaller than the CLI's: they are
     /// shown as 300 px tiles.
     static let proofLongEdge = 512
@@ -330,19 +337,46 @@ final class AIAssistant {
             }
             var feedback: String?
             let faces = await session.refreshSkinMask()
+            // With a reference, the closest print so far, by measurement. A
+            // round that leaves the print further from it is taken back, so a
+            // run toward a reference never ends further away than it began.
+            var best: (distance: Double, sidecar: Sidecar)?
+            var retraction: (from: Double, to: Double)?
+            @MainActor func shoot() async throws -> (jpeg: Data, metrics: ImageMetrics?) {
+                let preview = try await ws.preview(longEdge: AISettings.sentLongEdge)
+                defer { try? FileManager.default.removeItem(at: preview) }
+                let jpeg = try Data(contentsOf: preview)
+                return (jpeg, reference == nil ? nil : Self.metrics(jpeg))
+            }
+            /// Measures the print the last round left; true when it was taken back.
+            @MainActor func keepOrRetract(_ shot: (jpeg: Data, metrics: ImageMetrics?)) async throws -> Bool {
+                guard let reference, let m = shot.metrics else { return false }
+                let d = reference.distance(to: m)
+                guard let b = best, d > b.distance + Self.retractionMargin, let last = steps.indices.last else {
+                    best = (d, session.sidecar)
+                    return false
+                }
+                session.restoreSidecar(b.sidecar)
+                try await ws.settle()
+                steps[last].retracted = true
+                retraction = (b.distance, d)
+                return true
+            }
             for round in 1...Self.maxRounds {
                 try Task.checkCancellation()
                 guard session.selection == url else { return }
                 phase = .refining(round: round, of: Self.maxRounds)
-                let preview = try await ws.preview(longEdge: AISettings.sentLongEdge)
-                defer { try? FileManager.default.removeItem(at: preview) }
-                let jpeg = try Data(contentsOf: preview)
+                var shot = try await shoot()
+                if try await keepOrRetract(shot) { shot = try await shoot() }
+                let jpeg = shot.jpeg
                 let latitude = try? await ws.latitude()
                 let user = AIPrompts.refinerUser(
                     document: try ws.document, latitude: latitude, film: session.catalog.stock(session.params.filmStock)?.name,
                     exif: session.exif, intent: intent, history: steps, feedback: feedback,
                     round: round, of: Self.maxRounds, faces: faces, noFilm: session.noFilm,
-                    reference: reference?.metrics, print: reference == nil ? nil : Self.metrics(jpeg))
+                    reference: reference?.metrics, print: shot.metrics,
+                    distance: best?.distance, retracted: retraction)
+                retraction = nil
                 // Each round is a request of its own, so the reference goes
                 // with every one, labelled, ahead of the print.
                 let parts: [AIRequest.Part] = reference.map {
@@ -390,6 +424,9 @@ final class AIAssistant {
                 feedback = why
                 if move.done && why == nil { break }
             }
+            // The last round is measured too, and kept only if it came closer.
+            guard session.selection == url else { return }
+            if reference != nil { _ = try await keepOrRetract(try await shoot()) }
         }
     }
 
