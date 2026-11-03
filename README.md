@@ -89,7 +89,7 @@ xcodebuild -project Spektrafilm.xcodeproj -scheme SpektrafilmTests \
            -configuration Debug -derivedDataPath build/DerivedData test
 ```
 
-642 tests. The camera fixtures are not in this repository: without them 78
+647 tests. The camera fixtures are not in this repository: without them 78
 skip and the run takes about 45 seconds while still reporting 0 failures —
 trust the duration. To put your own photos through open, Process, a
 full-size print and an export, each stage timed:
