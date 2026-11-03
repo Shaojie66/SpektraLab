@@ -309,6 +309,38 @@ final class AIUnitTests: XCTestCase {
         XCTAssertTrue(user.contains("highlightPullBack"), "and so is the current total")
     }
 
+    /// A reference is named as the first image, its look and not its
+    /// subject is the target, the intent outranks it, and the gap is in
+    /// numbers. With none, nothing about one is said.
+    func testTheRefinerIsToldWhatAReferenceIsAndHowFarItIs() {
+        func px(_ r: UInt8, _ g: UInt8, _ b: UInt8) -> ImageMetrics {
+            let a = [UInt8](repeating: 0, count: 16).enumerated().map { [r, g, b, 255][$0.offset % 4] }
+            return a.withUnsafeBufferPointer { ImageMetrics(rgba: $0) }
+        }
+        let warm = px(200, 150, 90), grey = px(128, 128, 128)
+        func user(_ reference: ImageMetrics?, _ print: ImageMetrics?) -> String {
+            AIPrompts.refinerUser(document: ["params": [:], "adjustments": [:]], latitude: nil, film: nil, exif: nil,
+                                  intent: "", history: [], feedback: nil, round: 1, of: 3,
+                                  reference: reference, print: print)
+        }
+        let none = user(nil, nil)
+        XCTAssertFalse(none.lowercased().contains("reference"), none)
+
+        let told = user(warm, grey)
+        XCTAssertTrue(told.contains("after \"Reference:\""), "the images are named by their labels")
+        XCTAssertTrue(told.contains("Not its subject, framing or content"))
+        XCTAssertTrue(told.contains("the intent wins"))
+        XCTAssertTrue(told.contains("Measured on the reference: "))
+        XCTAssertTrue(told.contains("Measured on this print: "))
+        // Warm reference over a neutral print: castYB's gap is positive.
+        let head = "Reference minus print (positive: the reference has more): "
+        let gap = told.range(of: head).flatMap { start in
+            told[start.upperBound...].range(of: "}").map { String(told[start.upperBound...$0.lowerBound]) }
+        }.flatMap { try? JSONValue.parse($0) }
+        XCTAssertGreaterThan(gap?["castYB"]?.number ?? 0, 0.1, told)
+        XCTAssertEqual(gap?["castYB"]?.number ?? 0, warm.castYB - grey.castYB, accuracy: 1e-3)
+    }
+
     // MARK: which films
 
     func testTheDefaultCandidatesAreFairAndPrintable() {
@@ -1120,6 +1152,56 @@ final class AISessionTests: XCTestCase {
         }
     }
 
+    /// With a reference, every round carries it, labelled and ahead of the
+    /// print — each round is a request of its own — and Undo still takes the
+    /// whole run back. Without one, a round is the print and the text only.
+    func testARefinementWithAReferenceSendsItEveryRound() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        let s = ws.session
+        let script = Script([
+            ["rationale": "warmer", "patch_json": "{\"params\":{\"yFilterShift\":0.04}}", "placement": .null, "done": false],
+            ["rationale": "close", "patch_json": "{}", "placement": .null, "done": true],
+        ])
+        let assistant = AIAssistant(session: s)
+        assistant.makeClient = { AIClient(kind: .anthropic, model: "claude-opus-5-5", baseURL: "", apiKey: "k", transport: script) }
+        assistant.reference = try ReferenceImage.load(url)
+        let before = try s.agentDocument.json
+
+        assistant.refine()
+        try await Task.sleep(for: .milliseconds(50))
+        while assistant.busy { try await Task.sleep(for: .milliseconds(100)) }
+
+        XCTAssertNil(assistant.error, assistant.error ?? "")
+        XCTAssertEqual(script.sent.count, 2)
+        for (i, body) in script.sent.enumerated() {
+            guard case .array(let messages)? = body["messages"], case .array(let blocks)? = messages.first?["content"]
+            else { return XCTFail("round \(i + 1): no content") }
+            XCTAssertEqual(blocks.map { $0["type"]?.string ?? "" }, ["text", "image", "text", "image", "text"], "round \(i + 1)")
+            XCTAssertEqual(blocks[0]["text"]?.string, "Reference:")
+            XCTAssertEqual(blocks[2]["text"]?.string, "Current print:")
+            XCTAssertEqual(blocks[1]["source"]?["data"]?.string, assistant.reference?.jpeg.base64EncodedString(),
+                           "round \(i + 1): the reference comes first")
+            XCTAssertTrue(blocks[4]["text"]?.string?.contains("Measured on this print") == true)
+        }
+        XCTAssertEqual(s.params.yFilterShift, 0.04, accuracy: 1e-9)
+        XCTAssertNotNil(assistant.reference, "a reference outlives the run")
+
+        assistant.undoAI()
+        XCTAssertEqual(try s.agentDocument.json["params"]?["yFilterShift"], before["params"]?["yFilterShift"])
+
+        assistant.reference = nil
+        let bare = Script([["rationale": "", "patch_json": "{}", "placement": .null, "done": true]])
+        assistant.makeClient = { AIClient(kind: .anthropic, model: "claude-opus-5-5", baseURL: "", apiKey: "k", transport: bare) }
+        assistant.refine()
+        try await Task.sleep(for: .milliseconds(50))
+        while assistant.busy { try await Task.sleep(for: .milliseconds(100)) }
+        guard case .array(let messages)? = bare.sent.first?["messages"], case .array(let blocks)? = messages.first?["content"]
+        else { return XCTFail("no request") }
+        XCTAssertEqual(blocks.map { $0["type"]?.string ?? "" }, ["image", "text"], "no reference, no change to the request")
+    }
+
     /// Applying a negative from a slide film prints it: the film list leaves
     /// `scanFilm` on, and the paper the slide kept may already be the one.
     func testApplyingANegativeAfterASlidePrintsIt() async throws {
@@ -1515,6 +1597,87 @@ final class AIEndToEndTests: XCTestCase {
             let a = path.reduce(Optional(now)) { $0?[$1] }, b = path.reduce(Optional(then)) { $0?[$1] }
             XCTAssertEqual(a, b, "Undo AI changes puts \(field.path) back")
         }
+    }
+}
+
+/// Refine toward a reference on a real model, measured: how far the print's
+/// brightness, contrast, colourfulness and casts are from the reference's
+/// before and after. Opt-in like `AIEndToEndTests`, plus
+/// `SPK_AI_REFERENCE=<picture>`; `SPK_AI_OUT=<folder>` keeps the reference,
+/// the print before and the print after.
+@MainActor
+final class AIReferenceEndToEndTests: XCTestCase {
+    func testRefineTowardAReference() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let base = env["SPK_AI_E2E"], let model = env["SPK_AI_MODEL"], let refPath = env["SPK_AI_REFERENCE"] else {
+            throw XCTSkip("SPK_AI_E2E, SPK_AI_MODEL and SPK_AI_REFERENCE are not set")
+        }
+        let source = try XCTUnwrap(env["SPK_AI_IMAGE"].map(URL.init(fileURLWithPath:)), "SPK_AI_IMAGE")
+        let dir = FileManager.default.temporaryDirectory.appending(path: "spk-ai-ref-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: source.lastPathComponent)
+        try FileManager.default.copyItem(at: source, to: url)
+
+        let saved = (AISettings.enabled, AISettings.provider, AISettings.openAIBaseURL, AISettings.openAIModel,
+                     AISettings.anthropicModel)
+        addTeardownBlock { @MainActor in
+            (AISettings.enabled, AISettings.provider, AISettings.openAIBaseURL, AISettings.openAIModel,
+             AISettings.anthropicModel) = saved
+        }
+        AISettings.enabled = true
+        if base == "anthropic" {
+            try XCTSkipUnless(AIKeychain.has(.anthropic), "no Anthropic key in Settings ▸ AI")
+            AISettings.provider = .anthropic
+            AISettings.anthropicModel = model
+        } else {
+            AISettings.provider = .openAICompatible
+            AISettings.openAIBaseURL = base
+            AISettings.openAIModel = model
+        }
+
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        let s = ws.session
+        try await ws.process()
+        let reference = try ReferenceImage.load(URL(fileURLWithPath: refPath))
+        let out = env["SPK_AI_OUT"].map { URL(fileURLWithPath: $0, isDirectory: true) } ?? dir
+        try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        try? ProofSheet.writeJPEG(reference.image, to: out.appending(path: "reference.jpg"))
+
+        func measure(_ name: String) async throws -> ImageMetrics {
+            let file = try await ws.preview(to: out.appending(path: name), longEdge: AISettings.sentLongEdge)
+            return try XCTUnwrap(AIAssistant.metrics(try Data(contentsOf: file)))
+        }
+        func gaps(_ m: ImageMetrics) -> [String: Double] {
+            let r = reference.metrics
+            return ["meanLuma": abs(r.meanLuma - m.meanLuma), "contrast": abs(r.contrast - m.contrast),
+                    "colorfulness": abs(r.colorfulness - m.colorfulness),
+                    "castRG": abs(r.castRG - m.castRG), "castYB": abs(r.castYB - m.castYB)]
+        }
+        let start = try await measure("before.jpg")
+
+        let assistant = AIAssistant(session: s)
+        assistant.makeClient = { try AISettings.client() }
+        assistant.intent = env["SPK_AI_INTENT"] ?? ""
+        assistant.reference = reference
+        let clock = Date()
+        assistant.refine()
+        try await Task.sleep(for: .milliseconds(50))
+        while assistant.busy {
+            XCTAssertLessThan(Date().timeIntervalSince(clock), 1800, "the assistant did not finish")
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        XCTAssertNil(assistant.error, assistant.error ?? "")
+        for step in assistant.steps {
+            print("REF round \(step.round): \(step.rationale) | changed \(step.changed) | refused \(step.refused ?? "-")")
+        }
+        try await ws.settle()
+        let end = try await measure("after.jpg")
+        let a = gaps(start), b = gaps(end)
+        for k in a.keys.sorted() { print(String(format: "REF gap %@: %.3f -> %.3f", k, a[k]!, b[k]!)) }
+        print(String(format: "REF seconds: %.0f", Date().timeIntervalSince(clock)))
+        XCTAssertFalse(assistant.steps.isEmpty)
     }
 }
 

@@ -15,6 +15,7 @@
 
 import CoreGraphics
 import Foundation
+import ImageIO
 import Observation
 
 @MainActor
@@ -60,6 +61,10 @@ final class AIAssistant {
     /// What the person wants, in their words. May be empty.
     var intent = ""
     var includeMonochrome = false
+    /// A picture Refine brings the print's look toward. Kept across frames,
+    /// so a roll can be refined toward one reference, and never saved: it is
+    /// an instruction, not part of any frame's edit.
+    var reference: ReferenceImage?
     var recommendation: Recommendation?
     /// How the frame is exposed for its proofs, and who decided.
     struct ExposureChoice {
@@ -315,6 +320,8 @@ final class AIAssistant {
             guard session.pair == nil else { throw ProofSheet.Failure.pair }
             remember()
             steps = []
+            // The one chosen when Refine was pressed, for every round.
+            let reference = self.reference
             let ws = AgentWorkspace(attachedTo: session)
             // Judge colour on a solved print, as the MCP instructions ask.
             if (session.frameStates[url] ?? .unprocessed) == .unprocessed {
@@ -331,13 +338,18 @@ final class AIAssistant {
                 defer { try? FileManager.default.removeItem(at: preview) }
                 let jpeg = try Data(contentsOf: preview)
                 let latitude = try? await ws.latitude()
+                let user = AIPrompts.refinerUser(
+                    document: try ws.document, latitude: latitude, film: session.catalog.stock(session.params.filmStock)?.name,
+                    exif: session.exif, intent: intent, history: steps, feedback: feedback,
+                    round: round, of: Self.maxRounds, faces: faces, noFilm: session.noFilm,
+                    reference: reference?.metrics, print: reference == nil ? nil : Self.metrics(jpeg))
+                // Each round is a request of its own, so the reference goes
+                // with every one, labelled, ahead of the print.
+                let parts: [AIRequest.Part] = reference.map {
+                    [.text("Reference:"), .jpeg($0.jpeg), .text("Current print:"), .jpeg(jpeg), .text(user)]
+                } ?? [.jpeg(jpeg), .text(user)]
                 let answer = try await client.complete(AIRequest(
-                    system: AIPrompts.refinerSystem,
-                    parts: [.jpeg(jpeg), .text(AIPrompts.refinerUser(
-                        document: try ws.document, latitude: latitude, film: session.catalog.stock(session.params.filmStock)?.name,
-                        exif: session.exif, intent: intent, history: steps, feedback: feedback,
-                        round: round, of: Self.maxRounds, faces: faces, noFilm: session.noFilm))],
-                    schema: AIPrompts.refinerSchema))
+                    system: AIPrompts.refinerSystem, parts: parts, schema: AIPrompts.refinerSchema))
                 try Task.checkCancellation()
                 guard session.selection == url else { return }
                 // An answer that cannot be read is a round that was not
@@ -381,6 +393,22 @@ final class AIAssistant {
         }
     }
 
+    /// Read off the main actor; a file that is not an image is said under the
+    /// buttons and leaves any reference already chosen in place.
+    func chooseReference(_ url: URL) {
+        error = nil
+        Task { [weak self] in
+            do {
+                let r = try await Task.detached(priority: .userInitiated) { try ReferenceImage.load(url) }.value
+                self?.reference = r
+            } catch let e as ReferenceImage.Failure {
+                self?.error = e.localized
+            } catch {
+                self?.error = "\(error)"
+            }
+        }
+    }
+
     func undoAI() {
         guard !busy, let before, before.url == session.selection else { return }
         session.restoreSidecar(before.sidecar)
@@ -414,6 +442,13 @@ final class AIAssistant {
             self?.phase = .idle
             self?.task = nil
         }
+    }
+
+    /// The print as sent, measured the way the reference is.
+    nonisolated static func metrics(_ jpeg: Data) -> ImageMetrics? {
+        guard let source = CGImageSourceCreateWithData(jpeg as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        return ImageMetrics(image)
     }
 
     static func jpeg(_ image: CGImage) -> Data? {

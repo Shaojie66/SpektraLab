@@ -285,8 +285,12 @@ enum AIPrompts {
     @MainActor
     static func refinerUser(document: JSONValue, latitude: JSONValue?, film: String?, exif: EXIFReadout?,
                             intent: String, history: [AIAssistant.Step], feedback: String?,
-                            round: Int, of total: Int, faces: SkinMask? = nil, noFilm: Bool = false) -> String {
+                            round: Int, of total: Int, faces: SkinMask? = nil, noFilm: Bool = false,
+                            reference: ImageMetrics? = nil, print: ImageMetrics? = nil) -> String {
         var lines = ["The print above, round \(round) of \(total). Film: \(film ?? "?")."]
+        if let reference {
+            lines += referenceLines(reference, print: print)
+        }
         if noFilm {
             lines.append("The film simulation is off for this frame, and skin smoothing is done before the film, "
                          + "so it does not show: leave it at 0.")
@@ -400,6 +404,36 @@ enum AIPrompts {
     }
 
     // MARK: shared lines
+
+    /// What a reference asks for, and how far the print is from it. Its look
+    /// is the target, never its subject; the intent outranks it; and the
+    /// numbers are what a local model, unsure of a colour difference between
+    /// two pictures by eye, can converge on.
+    static func referenceLines(_ reference: ImageMetrics, print: ImageMetrics?) -> [String] {
+        var lines = [
+            "The first image, after \"Reference:\", is a picture the person wants this print to look like; the second, "
+            + "after \"Current print:\", is the print. Bring the print's look toward the reference: white balance and "
+            + "overall colour lean, saturation, brightness, contrast, how the highlights and the shadows are rendered. "
+            + "Not its subject, framing or content — it may be another scene, another film or a digital photograph. "
+            + "Get as close as the fields allow and stop there: what only another film could give, leave; keep skin "
+            + "and neutral greys believable. If the intent says otherwise, the intent wins.",
+            "Measured on the reference: " + reference.json.text(),
+        ]
+        if let print {
+            lines.append("Measured on this print: " + print.json.text())
+            func gap(_ a: Double, _ b: Double, _ places: Double = 1000) -> JSONValue {
+                .number(((a - b) * places).rounded() / places)
+            }
+            let g: JSONValue = ["meanLuma": gap(reference.meanLuma, print.meanLuma),
+                                "contrast": gap(reference.contrast, print.contrast),
+                                "colorfulness": gap(reference.colorfulness, print.colorfulness, 10),
+                                "castRG": gap(reference.castRG, print.castRG),
+                                "castYB": gap(reference.castYB, print.castYB)]
+            lines.append("Reference minus print (positive: the reference has more): " + g.text()
+                         + ". castYB is warm (+) / cool (−), castRG magenta (+) / green (−).")
+        }
+        return lines
+    }
 
     private static func shot(_ exif: EXIFReadout?) -> String {
         let parts = [exif?.iso, exif?.shutter, exif?.aperture].compactMap { $0 }
