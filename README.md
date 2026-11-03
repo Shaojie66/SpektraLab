@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=48dc08c; updated=2026-11-03 -->
+<!-- README_SYNC: source=0751c03; updated=2026-11-03 -->
 **English** · [简体中文](README.zh-CN.md)
 
 # spektralab-ai
@@ -89,7 +89,7 @@ xcodebuild -project Spektrafilm.xcodeproj -scheme SpektrafilmTests \
            -configuration Debug -derivedDataPath build/DerivedData test
 ```
 
-636 tests. The camera fixtures are not in this repository: without them 78
+638 tests. The camera fixtures are not in this repository: without them 78
 skip and the run takes about 45 seconds while still reporting 0 failures —
 trust the duration. To put your own photos through open, Process, a
 full-size print and an export, each stage timed:

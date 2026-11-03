@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=48dc08c; updated=2026-11-03 -->
+<!-- README_SYNC: source=0751c03; updated=2026-11-03 -->
 [English](README.md) · **简体中文**
 
 # spektralab-ai
@@ -73,7 +73,7 @@ xcodebuild -project Spektrafilm.xcodeproj -scheme SpektrafilmTests \
            -configuration Debug -derivedDataPath build/DerivedData test
 ```
 
-共 636 个测试。相机测试素材不在本仓库里：没有素材时会跳过 78 个，大约 45 秒跑完，照样报告 0 失败——看耗时，别只看失败数。想用自己的照片把"打开、配光、全尺寸冲印、导出"完整走一遍并分步计时：
+共 638 个测试。相机测试素材不在本仓库里：没有素材时会跳过 78 个，大约 45 秒跑完，照样报告 0 失败——看耗时，别只看失败数。想用自己的照片把"打开、配光、全尺寸冲印、导出"完整走一遍并分步计时：
 
 ```bash
 TEST_RUNNER_SPK_PIPELINE_DIR=~/photos TEST_RUNNER_SPK_PIPELINE_OUT=/tmp/out \

@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=48dc08c; updated=2026-11-03 -->
+<!-- README_SYNC: source=0751c03; updated=2026-11-03 -->
 **English** · [简体中文](AI.zh-CN.md) · [Back to the README](../README.md)
 
 # The AI features
@@ -106,6 +106,15 @@ where the two disagree. Both pictures are measured (brightness, contrast, colour
 magenta/green and warm/cool cast) and the gap is given to the model in
 numbers. The limits above still hold: a reference shot on another film, or on
 a digital camera, can only be approached within the current film's range.
+
+With a reference, brightness is matched with print brightness, the enlarger's
+exposure: Film Exposure and the meter move the scene along the film's curve —
+its contrast and the colour in the toe and shoulder — far more than they move
+the print's brightness, and Scene Placement is for a scene the medium cannot
+hold. Each round's print is also measured against the reference, and a round
+that leaves it noticeably further away is taken back; the panel marks it
+"Taken back", and the next round is told. The last round is measured too, so
+a run toward a reference does not end further from it than it began.
 
 The reference is held in memory only. It stays when you switch photos, so a
 roll can be refined toward one reference; it is never saved in a photo's
