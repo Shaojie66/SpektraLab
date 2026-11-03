@@ -25,8 +25,8 @@ struct AISettingsPage: View {
             SettingsRows {
                 VStack(alignment: .leading, spacing: 4) {
                     ToggleRow(label: L("Use AI to choose films and refine prints", zh: "使用 AI 选片和精修"), isOn: $enabled)
-                    caption(L("Only when you press Recommend or Refine in the AI tab, small copies of the photograph are sent to the provider below — a contact sheet of proofs about 1,500 px across when choosing a film, the print at \(AISettings.sentLongEdge) px when refining — with its exposure data and the edit's numbers. Nothing is sent otherwise. Usage is billed to your own API account.",
-                              zh: "只有在 AI 标签页点击“推荐胶片”或“开始精修”时，才会把照片的小尺寸副本发送给下面的服务商：选片时是约 1500 px 宽的小样联系表，精修时是 \(AISettings.sentLongEdge) px 的成片，同时附带拍摄参数和调整数值。其他时候不发送任何内容。费用计入你自己的 API 账户。"))
+                    caption(L("Only when you press Recommend, Recommend crops or Refine in the AI tab, small copies of the photograph are sent to the provider below — a contact sheet of proofs about 1,500 px across when choosing a film or a crop, the print at \(AISettings.sentLongEdge) px when refining, and the reference image at the same size if you chose one — with its exposure data and the edit's numbers. Nothing is sent otherwise. Usage is billed to your own API account.",
+                              zh: "只有在 AI 标签页点击“推荐胶片”“推荐构图”或“开始精修”时，才会把照片的小尺寸副本发送给下面的服务商：选片和构图时是约 1500 px 宽的小样联系表，精修时是 \(AISettings.sentLongEdge) px 的成片，选了参考图时也会附上同样尺寸的参考图，同时附带拍摄参数和调整数值。其他时候不发送任何内容。费用计入你自己的 API 账户。"))
                 }
             }
         }

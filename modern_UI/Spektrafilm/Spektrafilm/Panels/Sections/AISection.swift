@@ -11,6 +11,7 @@
 
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 extension AIAssistant {
     private static let registry = NSMapTable<Session, AIAssistant>.weakToStrongObjects()
@@ -187,6 +188,7 @@ struct AISection: View {
             RailRows {
                 caption(L("The model looks at the print and moves this frame's own controls — exposure, the enlarger's filters, Scene Placement and Post-Dev — up to \(AIAssistant.maxRounds) rounds. The film and paper stay.",
                           zh: "模型查看成片后调整这张照片自己的参数：曝光、放大机滤色、场景置位和显影后调色，最多 \(AIAssistant.maxRounds) 轮。胶片和相纸不变。"))
+                referenceRow
                 HStack(spacing: 8) {
                     pill(L("Refine", zh: "开始精修"),
                          help: L("Uses the intent above.", zh: "使用上面填写的意图。"),
@@ -217,6 +219,51 @@ struct AISection: View {
                 }
             }
         }
+    }
+
+    /// A picture whose look the print is brought toward: chosen from a panel
+    /// or dropped on the row. Its colour, density and contrast, not its subject.
+    @ViewBuilder private var referenceRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let r = assistant.reference {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(decorative: r.image, scale: 1)
+                        .resizable().aspectRatio(contentMode: .fit)
+                        .frame(width: 64, height: 64)
+                        .background(Theme.plot)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(r.name).font(Theme.Font.label).foregroundStyle(Theme.text)
+                            .lineLimit(1).truncationMode(.middle)
+                        caption(L("Refine brings the print's colour, density and contrast toward it, as far as this film allows.",
+                                  zh: "精修会把成片的色调、密度和反差往它靠，在当前胶片能做到的范围内。"))
+                        HStack(spacing: 8) {
+                            pill(L("Change…", zh: "更换…"), help: "", enabled: !assistant.busy) { pickReference() }
+                            pill(L("Remove", zh: "移除"), help: "", enabled: !assistant.busy) { assistant.reference = nil }
+                        }
+                    }
+                }
+            } else {
+                pill(L("Reference image…", zh: "选择参考图…"),
+                     help: L("A picture whose look you want — its colour and contrast, not its subject. You can also drop one here.",
+                             zh: "一张你想要的感觉的照片——参考它的色调和反差，而不是内容。也可以直接拖到这里。"),
+                     enabled: !assistant.busy) { pickReference() }
+            }
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+            guard !assistant.busy, let url = urls.first else { return false }
+            assistant.chooseReference(url)
+            return true
+        }
+    }
+
+    private func pickReference() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = L("Choose a picture whose look you want.", zh: "选择一张你想要的感觉的照片。")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        assistant.chooseReference(url)
     }
 
     // MARK: pieces
