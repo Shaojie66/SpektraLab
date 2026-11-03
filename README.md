@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=98afcf4; updated=2026-11-02 -->
+<!-- README_SYNC: source=48dc08c; updated=2026-11-03 -->
 **English** · [简体中文](README.zh-CN.md)
 
 # spektralab-ai
@@ -27,7 +27,7 @@ AI features, go to [spektralab.app](https://spektralab.app).
 |---|---|---|
 | **Choose a film** | Sets the meter for the scene, proofs every colour film on one contact sheet, and has a vision model pick 3–5 with reasons | your model |
 | **Compose** | Measures horizon, salient region and faces, builds 8–12 crops by rule, and has the model pick three; levels a tilted horizon | your model, measurements local |
-| **Refine** | Up to three rounds on the existing controls — metering, exposure, filters, grain, grading — never the film, crop or pixels | your model |
+| **Refine** | Up to three rounds on the existing controls — metering, exposure, filters, grain, grading — never the film, crop or pixels; can follow a reference picture | your model |
 | **Skin smoothing** | A Portrait slider that evens out blotches before the film, so grain still lands on the skin; finds the small faces of a group | the Mac, no model |
 
 Every AI change undoes in one step, photos leave the Mac only when you press a
@@ -89,7 +89,7 @@ xcodebuild -project Spektrafilm.xcodeproj -scheme SpektrafilmTests \
            -configuration Debug -derivedDataPath build/DerivedData test
 ```
 
-629 tests. The camera fixtures are not in this repository: without them 76
+635 tests. The camera fixtures are not in this repository: without them 78
 skip and the run takes about 45 seconds while still reporting 0 failures —
 trust the duration. To put your own photos through open, Process, a
 full-size print and an export, each stage timed:

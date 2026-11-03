@@ -365,7 +365,11 @@ map. Three things to keep:
 - **The opt-in end-to-end test is free locally:**
   `TEST_RUNNER_SPK_AI_E2E=http://localhost:11434/v1
   TEST_RUNNER_SPK_AI_MODEL=<vision model> TEST_RUNNER_SPK_AI_IMAGE=<photo>`
-  with `-only-testing:SpektrafilmTests/AIEndToEndTests`.
+  with `-only-testing:SpektrafilmTests/AIEndToEndTests`. Add
+  `TEST_RUNNER_SPK_AI_REFERENCE=<picture>` and run
+  `AIReferenceEndToEndTests` for Refine toward a reference: it prints the
+  `ImageMetrics` gap before and after, and `TEST_RUNNER_SPK_AI_OUT=<folder>`
+  keeps `reference.jpg`, `before.jpg` and `after.jpg`.
 
 ## Traps
 

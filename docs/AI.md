@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=98afcf4; updated=2026-11-02 -->
+<!-- README_SYNC: source=48dc08c; updated=2026-11-03 -->
 **English** · [简体中文](AI.zh-CN.md) · [Back to the README](../README.md)
 
 # The AI features
@@ -88,6 +88,30 @@ refusal is sent back to it. This is not generative retouching: it moves
 existing controls, never the film model or the print's pixels, and the result
 is saved in the ordinary sidecar.
 
+You can also give Refine a reference picture: **Reference image…** opens a file
+panel, or you drop a picture on that row. It then shows as a thumbnail with its
+file name, **Change…** and **Remove**. Any file macOS can read works (JPEG, PNG,
+HEIC, TIFF; a RAW gives its embedded preview). It is read upright, scaled to the
+same 1024 px as the print and converted to sRGB; a file that is not an image is
+refused with a message naming it.
+
+With a reference, every round sends it, labelled "Reference:", ahead of the
+print, labelled "Current print:". The model is told to bring the print's look
+toward the reference — white balance and colour lean, saturation, brightness,
+contrast, how highlights and shadows are rendered — and not its subject,
+framing or content, so the reference can be another scene, another film or a
+digital photo. It is asked to get as close as the existing fields allow and
+stop there, to keep skin and neutral greys believable, and to follow your intent
+where the two disagree. Both pictures are measured (brightness, contrast, colourfulness,
+magenta/green and warm/cool cast) and the gap is given to the model in
+numbers. The limits above still hold: a reference shot on another film, or on
+a digital camera, can only be approached within the current film's range.
+
+The reference is held in memory only. It stays when you switch photos, so a
+roll can be refined toward one reference; it is never saved in a photo's
+sidecar and is gone when the app quits. Without a reference, Refine's request
+is unchanged.
+
 It is told how many faces were found, how many could not be read, and whether
 they are all small. It uses skin smoothing only when there is a face —
 usually 0.2–0.4 for a natural portrait, none when people are small or only in
@@ -158,8 +182,10 @@ paste settings does not copy them: every photo has different faces.
 ## Privacy and cost
 
 - Photos leave the Mac only when you press **Recommend**, **Recommend crops** or
-  **Refine**, together with exposure data and edit values; the connection test
-  sends text only. With local Ollama nothing leaves the Mac.
+  **Refine**, together with exposure data and edit values; when you have chosen
+  a reference image, Refine sends it too, at the same size as the print, so each
+  round of a cloud model costs one more image. The connection test sends text
+  only. With local Ollama nothing leaves the Mac.
 - Usage of a cloud model is billed to your own account.
 - Keys are stored in the macOS Keychain, never in settings, sidecars or logs.
 - Face, horizon and saliency detection always run locally.
