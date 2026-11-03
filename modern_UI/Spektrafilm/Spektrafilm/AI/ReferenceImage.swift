@@ -31,6 +31,19 @@ struct ReferenceImage: Sendable {
             + abs(r.castRG - print.castRG) / 0.02 + abs(r.castYB - print.castYB) / 0.02
     }
 
+    /// How far a *film* is from this reference: only what Refine cannot
+    /// move afterwards — contrast and colourfulness, the film's own. The
+    /// print's overall brightness is the enlarger's and an overall cast its
+    /// filters', so neither counts against a film. What Choose a Film ranks by.
+    func filmDistance(to proof: ImageMetrics) -> Double {
+        let r = metrics
+        return abs(r.contrast - proof.contrast) / 0.03 + abs(r.colorfulness - proof.colorfulness) / 8
+    }
+
+    /// A reference with no colour to speak of: choosing among colour films
+    /// for it means nothing, so the chooser offers black and white as well.
+    var isMonochrome: Bool { metrics.colorfulness < 4 }
+
     enum Failure: Error, CustomStringConvertible {
         case unreadable(String)
         var description: String {

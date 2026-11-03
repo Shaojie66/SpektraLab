@@ -1024,6 +1024,32 @@ final class ReferenceImageTests: XCTestCase {
         XCTAssertGreaterThan(r.distance(to: warmerAndDarker), r.distance(to: warmer))
     }
 
+    /// A film is judged only by what Refine cannot move afterwards: its
+    /// contrast and colourfulness. Brightness and an overall cast are the
+    /// enlarger's. A grey reference has no colour, so it asks for black and white.
+    func testAFilmIsJudgedByWhatRefineCannotMove() throws {
+        let url = try dir().appending(path: "grey.png")
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 64, height: 64, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        ctx.setFillColor(CGColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+        let dest = try XCTUnwrap(CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(dest, try XCTUnwrap(ctx.makeImage()), nil)
+        XCTAssertTrue(CGImageDestinationFinalize(dest))
+        let r = try ReferenceImage.load(url)
+        XCTAssertTrue(r.isMonochrome)
+        XCTAssertEqual(r.filmDistance(to: r.metrics), 0, accuracy: 1e-9)
+        var brighterAndWarmer = r.metrics
+        brighterAndWarmer.meanLuma += 0.2; brighterAndWarmer.castYB += 0.05; brighterAndWarmer.castRG -= 0.03
+        XCTAssertEqual(r.filmDistance(to: brighterAndWarmer), 0, accuracy: 1e-9, "the enlarger's, not the film's")
+        XCTAssertGreaterThan(r.distance(to: brighterAndWarmer), 1, "while Refine's distance sees them")
+        var vivid = r.metrics; vivid.colorfulness += 8
+        var vividAndHard = vivid; vividAndHard.contrast += 0.03
+        XCTAssertEqual(r.filmDistance(to: vivid), 1, accuracy: 1e-9)
+        XCTAssertEqual(r.filmDistance(to: vividAndHard), 2, accuracy: 1e-9)
+    }
+
     func testAFileThatIsNotAnImageIsRefusedByName() throws {
         let url = try dir().appending(path: "notes.jpg")
         try Data("not a picture".utf8).write(to: url)
