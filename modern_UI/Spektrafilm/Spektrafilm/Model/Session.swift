@@ -4076,6 +4076,14 @@ final class Session: CanvasHost {
                 // On a frame that is still only decoded, Solve is also the
                 // develop — and the session it returns is the one to solve.
                 guard let sid = await ensureDeveloped(), serviceSessionID == sid else { return }
+                // An edit made a moment before — a film chosen and Process
+                // pressed in one go, as Apply does — may still be in the
+                // scheduler's debounce. The solve is for that edit, so it goes
+                // to the engine first; its render reports itself finished,
+                // which this is not.
+                await scheduler.flush()
+                busy = true
+                guard serviceSessionID == sid else { return }
                 try await solveFilterPack(sessionID: sid)
                 guard serviceSessionID == sid else { return }
                 let rr = try await client.render(.reprint, RenderRequest(sessionID: sid))

@@ -1353,6 +1353,48 @@ final class AISessionTests: XCTestCase {
         XCTAssertTrue(text.contains("Taken back: it moved the print away"), "the history says so too")
     }
 
+    /// **Apply prints the film it chose.** It changes the film and presses
+    /// Process in one go; the change was still in the scheduler's debounce
+    /// when Solve ran, so the engine solved — and kept — the film before,
+    /// and the scheduler then recorded the new film as sent. The parameters
+    /// said Vision3 500T and every print was still the Portra one. Measured
+    /// against the same film reached by an edit and Process in a workspace of
+    /// its own.
+    func testApplyingAFilmPrintsThatFilm() async throws {
+        let url = try syntheticFrame()
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let thumb = try XCTUnwrap(CGContext(data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)?.makeImage())
+        func print(_ ws: AgentWorkspace) async throws -> ImageMetrics {
+            try await ws.settle()
+            let f = try await ws.preview(longEdge: 512)
+            defer { try? FileManager.default.removeItem(at: f) }
+            return try XCTUnwrap(AIAssistant.metrics(try Data(contentsOf: f)))
+        }
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        try await ws.process()
+        let before = try await print(ws)
+        let assistant = AIAssistant(session: ws.session)
+        assistant.apply(AIAssistant.Pick(index: 1, candidate: ProofCandidate(film: "kodak_vision3_500t", paper: "kodak_2383"),
+                                         score: 1, reason: "", thumbnail: thumb))
+        try await Task.sleep(for: .milliseconds(50))
+        while ws.session.busy { try await Task.sleep(for: .milliseconds(50)) }
+        let applied = try await print(ws)
+
+        let truth = AgentWorkspace()
+        try await truth.open(url.path)
+        _ = try await truth.edit(["params": ["filmStock": "kodak_vision3_500t", "printStock": "kodak_2383"]])
+        try await truth.settle()
+        try await truth.process()
+        let expected = try await print(truth)
+
+        XCTAssertGreaterThan(abs(expected.colorfulness - before.colorfulness), 2, "the two films print apart")
+        XCTAssertEqual(applied.colorfulness, expected.colorfulness, accuracy: 0.5, "Apply printed the film it chose")
+        XCTAssertEqual(applied.meanLuma, expected.meanLuma, accuracy: 0.005)
+        XCTAssertEqual(applied.castYB, expected.castYB, accuracy: 0.005, "and solved its pack, not the one before")
+    }
+
     /// Applying a negative from a slide film prints it: the film list leaves
     /// `scanFilm` on, and the paper the slide kept may already be the one.
     func testApplyingANegativeAfterASlidePrintsIt() async throws {

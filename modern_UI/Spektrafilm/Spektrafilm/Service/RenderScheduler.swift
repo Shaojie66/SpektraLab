@@ -53,6 +53,17 @@ final class RenderScheduler {
         return generation
     }
 
+    /// Until the engine holds what was last requested: an edit still in the
+    /// debounce is sent now and waited for. A call that acts on the engine's
+    /// own state — Solve — must come after it, or it acts on the edit before
+    /// and `reset` then records the new one as sent without it ever going.
+    func flush() async {
+        while pending, sessionID != nil, !Task.isCancelled {
+            if loop == nil { loop = Task { await run() } }
+            await loop?.value
+        }
+    }
+
     func invalidate() {
         loop?.cancel(); loop = nil
         generation += 1
