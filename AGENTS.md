@@ -365,14 +365,24 @@ map. Three things to keep:
 - **The opt-in end-to-end test is free locally:**
   `TEST_RUNNER_SPK_AI_E2E=http://localhost:11434/v1
   TEST_RUNNER_SPK_AI_MODEL=<vision model> TEST_RUNNER_SPK_AI_IMAGE=<photo>`
-  with `-only-testing:SpektrafilmTests/AIEndToEndTests`. Add
-  `TEST_RUNNER_SPK_AI_REFERENCE=<picture>` and run
-  `AIReferenceEndToEndTests` for Refine toward a reference: it prints the
-  `ImageMetrics` gap before and after, and `TEST_RUNNER_SPK_AI_OUT=<folder>`
-  keeps `reference.jpg`, `before.jpg` and `after.jpg`. Add
-  `TEST_RUNNER_SPK_AI_CHOOSE=1` to choose and apply a film toward the
-  reference before refining; it prints where the pick stands among the proofs
-  by film distance.
+  with `-only-testing:SpektrafilmTests/AIEndToEndTests`. Toward a reference
+  picture the test is `AIEvalTests`, and `Tools/ai-eval.sh` runs it: a JSON
+  manifest of photos, references and modes (`refine`, `choose+refine`), each
+  run on a fresh copy, the `ReferenceImage.distance` before, after choosing
+  and after Refine, and where the pick stands among the proofs by film
+  distance. It writes `results.json`, `summary.md` and `sheet.jpg`; the
+  manifest, how to read the table and how the references were made are in
+  `Tools/ai-eval/README.md`. It replaced `AIReferenceEndToEndTests`; its
+  single-case form (`TEST_RUNNER_SPK_AI_IMAGE` + `…_REFERENCE`, `…_CHOOSE=1`,
+  `…_OUT`) still works.
+- **Run the evaluation after changing a prompt in `AIPrompts.swift`, the
+  model, or the choose/refine flow in `AIAssistant.swift`, and compare it with
+  the previous `results.json` (`--baseline`).** A green suite does not cover
+  this: the refiner telling the enlarger filters' direction backwards (45bcc2c)
+  and Apply printing the previous film (4dacb23) passed every unit test and
+  were found only by measuring the distance to a reference. A median ending
+  more than 0.5 further than last time is marked; one model's runs vary, so
+  the baseline counts only on the same manifest, machine and model.
 
 ## Traps
 

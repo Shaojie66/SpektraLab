@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=4dacb23; updated=2026-11-03 -->
+<!-- README_SYNC: source=392962a; updated=2026-11-03 -->
 [English](README.md) · **简体中文**
 
 # spektralab-ai
@@ -81,6 +81,8 @@ xcodebuild -project Spektrafilm.xcodeproj -scheme SpektrafilmTests \
            -configuration Debug -derivedDataPath build/DerivedData \
            test -only-testing:SpektrafilmTests/PipelinePhotoTests
 ```
+
+想用参考图在真实模型上测量 AI 助手的效果，见 [`modern_UI/Spektrafilm/Tools/ai-eval/README.md`](modern_UI/Spektrafilm/Tools/ai-eval/README.md)。
 
 ## 目录
 
