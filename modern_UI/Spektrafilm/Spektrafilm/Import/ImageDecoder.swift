@@ -109,7 +109,10 @@ struct EngineFrame: @unchecked Sendable {
 enum ImageDecoder {
     static let rawExtensions: Set<String> =
         ["nef", "arw", "dng", "cr2", "cr3", "raf", "rw2", "orf", "pef", "srw", "3fr", "iiq"]
-    static let flatExtensions: Set<String> = ["tif", "tiff", "png", "jpg", "jpeg", "heic", "exr"]
+    /// Decoded by Core Image (`decodeFlat`), so any format ImageIO reads.
+    /// WebP since 2026-11-04: what a photo from a phone or the web often is,
+    /// and refused by name until then though ImageIO had always read it.
+    static let flatExtensions: Set<String> = ["tif", "tiff", "png", "jpg", "jpeg", "heic", "webp", "exr"]
     static var openable: Set<String> { rawExtensions.union(flatExtensions) }
 
     enum Failure: Error, LocalizedError {

@@ -450,6 +450,7 @@
 		F7A3E595E891C5B80D358334 /* TypingKeyGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TypingKeyGuardTests.swift"; sourceTree = "<group>"; };
 		E519422FCB997EFAA37EF9BA /* UpdateCheckTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UpdateCheckTests.swift"; sourceTree = "<group>"; };
 		19533F295FB7423FCE62C8DD /* ViewportStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ViewportStateTests.swift"; sourceTree = "<group>"; };
+		B571A5B8D84C5BEBD3E387E7 /* WebPTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WebPTests.swift"; sourceTree = "<group>"; };
 		F5302C66459D988E5FC47CA3 /* WhiteBalanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WhiteBalanceTests.swift"; sourceTree = "<group>"; };
 		6C750F429B304AF107F89FFD /* SpektrafilmTests */ = {
 			isa = PBXGroup;
@@ -518,11 +519,24 @@
 				F7A3E595E891C5B80D358334 /* TypingKeyGuardTests.swift */,
 				E519422FCB997EFAA37EF9BA /* UpdateCheckTests.swift */,
 				19533F295FB7423FCE62C8DD /* ViewportStateTests.swift */,
+				B571A5B8D84C5BEBD3E387E7 /* WebPTests.swift */,
 				F5302C66459D988E5FC47CA3 /* WhiteBalanceTests.swift */
 			);
 			path = "SpektrafilmTests";
 			sourceTree = "<group>";
 		};
+		CFDED08875F2C80191B6F698 /* example.json */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "example.json"; sourceTree = "<group>"; };
+		897F2167ADD1772E3D3CBBCA /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "README.md"; sourceTree = "<group>"; };
+		5FF7369D3CD7098788CDE2B5 /* ai-eval */ = {
+			isa = PBXGroup;
+			children = (
+				CFDED08875F2C80191B6F698 /* example.json */,
+				897F2167ADD1772E3D3CBBCA /* README.md */
+			);
+			path = "ai-eval";
+			sourceTree = "<group>";
+		};
+		32896329A79C76B9EFD9FE4F /* ai-eval.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "ai-eval.sh"; sourceTree = "<group>"; };
 		3B5B23434C9E6560483E822B /* bundle-licenses.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "bundle-licenses.sh"; sourceTree = "<group>"; };
 		769986EEE867DFEAEA6221C8 /* capture-live.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "capture-live.sh"; sourceTree = "<group>"; };
 		58B2C0307BBC444C754E5565 /* check-bundle-resources.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "check-bundle-resources.sh"; sourceTree = "<group>"; };
@@ -539,6 +553,8 @@
 		B023CA8F0F68491740229B47 /* Tools */ = {
 			isa = PBXGroup;
 			children = (
+				5FF7369D3CD7098788CDE2B5 /* ai-eval */,
+				32896329A79C76B9EFD9FE4F /* ai-eval.sh */,
 				3B5B23434C9E6560483E822B /* bundle-licenses.sh */,
 				769986EEE867DFEAEA6221C8 /* capture-live.sh */,
 				58B2C0307BBC444C754E5565 /* check-bundle-resources.sh */,
@@ -1011,6 +1027,7 @@
 		9F291F8FE6D9833514B42091 /* TypingKeyGuardTests.swift */ = {isa = PBXBuildFile; fileRef = F7A3E595E891C5B80D358334; };
 		C75BB18A94E8AF5DC533FCEC /* UpdateCheckTests.swift */ = {isa = PBXBuildFile; fileRef = E519422FCB997EFAA37EF9BA; };
 		79E5DF91AA1045E525966216 /* ViewportStateTests.swift */ = {isa = PBXBuildFile; fileRef = 19533F295FB7423FCE62C8DD; };
+		426A70F16E33AA6AF31C66AB /* WebPTests.swift */ = {isa = PBXBuildFile; fileRef = B571A5B8D84C5BEBD3E387E7; };
 		1AF1357ED1527EBC8166745C /* WhiteBalanceTests.swift */ = {isa = PBXBuildFile; fileRef = F5302C66459D988E5FC47CA3; };
 		8AA25BB76485FFA99E0A4A64 /* AgentAccess.swift */ = {isa = PBXBuildFile; fileRef = AE70E61D58C8511384C45D65; };
 		5B41797719DB0E6D416B8D2F /* AgentCLI.swift */ = {isa = PBXBuildFile; fileRef = 788D6173F59CE514C7ABF744; };
@@ -1223,6 +1240,7 @@
 				9F291F8FE6D9833514B42091 /* TypingKeyGuardTests.swift */,
 				C75BB18A94E8AF5DC533FCEC /* UpdateCheckTests.swift */,
 				79E5DF91AA1045E525966216 /* ViewportStateTests.swift */,
+				426A70F16E33AA6AF31C66AB /* WebPTests.swift */,
 				1AF1357ED1527EBC8166745C /* WhiteBalanceTests.swift */,
 				8AA25BB76485FFA99E0A4A64 /* AgentAccess.swift */,
 				5B41797719DB0E6D416B8D2F /* AgentCLI.swift */,

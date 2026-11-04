@@ -27,7 +27,7 @@ enum Library {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
         panel.message = "Open a folder of negatives, or one or more image files."
-        panel.allowedContentTypes = [.folder, .image, .rawImage, .tiff, .png, .jpeg, .heic]
+        panel.allowedContentTypes = [.folder, .image, .rawImage, .tiff, .png, .jpeg, .heic, .webP]
         return panel.runModal() == .OK ? panel.urls : []
     }
 
