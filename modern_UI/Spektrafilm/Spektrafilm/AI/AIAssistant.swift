@@ -407,17 +407,19 @@ final class AIAssistant {
                 } catch let e as AIError {
                     steps.append(Step(round: round, rationale: answer["rationale"]?.string ?? "", changed: [],
                                       refused: e.description))
-                    feedback = e.description
+                    feedback = AIPrompts.unreadableFeedback(e.description)
                     continue
                 }
                 var changed: [String] = []
-                var refused: [String] = []
+                // Apart, because they are applied apart: a refused placement
+                // leaves the patch in force, and the model must hear which.
+                var patchRefused: String?, placementRefused: String?
                 if let patch = move.patch {
                     do {
                         try AIPrompts.checkScope(patch)
                         changed += try await ws.edit(patch)
                     } catch let e as AgentError {
-                        refused.append(e.description)
+                        patchRefused = e.description
                     }
                 }
                 if let place = move.placement {
@@ -428,13 +430,14 @@ final class AIAssistant {
                         _ = try await ws.place(highlight: place.highlight, shadow: place.shadow)
                         if session.params.sceneLatitude != was { changed.append("params.sceneLatitude") }
                     } catch let e as AgentError {
-                        refused.append(e.description)
+                        placementRefused = e.description
                     }
                 }
                 try await ws.settle()
-                let why = refused.isEmpty ? nil : refused.joined(separator: " ")
+                let refusals = [patchRefused, placementRefused].compactMap { $0 }
+                let why = refusals.isEmpty ? nil : refusals.joined(separator: " ")
                 steps.append(Step(round: round, rationale: move.rationale, changed: changed, refused: why))
-                feedback = why
+                feedback = AIPrompts.roundFeedback(patchRefused: patchRefused, placementRefused: placementRefused, applied: changed)
                 if move.done && why == nil { break }
             }
             // The last round is measured too, and kept only if it came closer.

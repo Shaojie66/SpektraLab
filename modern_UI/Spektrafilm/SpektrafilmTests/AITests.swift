@@ -370,6 +370,26 @@ final class AIUnitTests: XCTestCase {
         XCTAssertFalse(slide.contains("Match brightness with params.printBrightnessStops"), "no print brightness on a scan")
     }
 
+    /// A round is told back as it was: what was refused, and — when only the
+    /// placement was — that the patch beside it went through.
+    func testTheRefinerIsToldWhichPartOfARoundWasApplied() {
+        XCTAssertNil(AIPrompts.roundFeedback(patchRefused: nil, placementRefused: nil, applied: ["params.yFilterShift"]))
+        let placementOnly = AIPrompts.roundFeedback(patchRefused: nil, placementRefused: "too small.",
+                                                     applied: ["params.printBrightnessStops"]) ?? ""
+        XCTAssertTrue(placementOnly.contains("Scene Placement was refused"))
+        XCTAssertTrue(placementOnly.contains("The rest of that round WAS applied — params.printBrightnessStops"), placementOnly)
+        XCTAssertTrue(placementOnly.contains("do not repeat or enlarge"))
+        XCTAssertFalse(placementOnly.contains("patch was refused"), "the patch was not refused")
+        let alone = AIPrompts.roundFeedback(patchRefused: nil, placementRefused: "too small.", applied: []) ?? ""
+        XCTAssertTrue(alone.contains("Nothing else in that round changed anything"))
+        let patch = AIPrompts.roundFeedback(patchRefused: "out of range.", placementRefused: nil, applied: ["params.sceneLatitude"]) ?? ""
+        XCTAssertTrue(patch.contains("Your last patch was refused, so it was not applied: out of range."))
+        XCTAssertTrue(patch.contains("Its Scene Placement was applied."))
+        let both = AIPrompts.roundFeedback(patchRefused: "out of range.", placementRefused: "too small.", applied: []) ?? ""
+        XCTAssertTrue(both.contains("Its Scene Placement was refused too: too small."))
+        XCTAssertTrue(AIPrompts.unreadableFeedback("no JSON.").contains("nothing in it was applied"))
+    }
+
     /// With a reference the chooser is told what it is for and each tile's
     /// film distance; without one, nothing about a reference is said.
     func testTheChooserIsToldWhatAReferenceIsAndHowFarEachFilmIs() throws {
@@ -1492,6 +1512,35 @@ final class AISessionTests: XCTestCase {
         while assistant.busy { try await Task.sleep(for: .milliseconds(100)) }
         XCTAssertNil(assistant.error, assistant.error ?? "")
         XCTAssertTrue(script.sent.first?.text().contains("This film is scanned, not printed") == true)
+    }
+
+    /// **A refused placement leaves the patch beside it in force, and the
+    /// next round hears so.** The scripted model writes print brightness and
+    /// a placement short of the Fit's minimum (0.05 of a needed 0.45 stops on
+    /// the synthetic frame), as on the desk shot that showed it.
+    func testARefusedPlacementSaysTheRestWasApplied() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        try await ws.process()
+        let s = ws.session
+        let script = Script([
+            ["rationale": "brighter, and place", "patch_json": "{\"params\":{\"printBrightnessStops\":0.5}}",
+             "placement": ["highlight": 0.05, "shadow": 0], "done": false],
+            ["rationale": "", "patch_json": "{}", "placement": .null, "done": true],
+        ])
+        let assistant = AIAssistant(session: s)
+        assistant.makeClient = { AIClient(kind: .anthropic, model: "claude-opus-5-5", baseURL: "", apiKey: "k", transport: script) }
+        assistant.refine()
+        try await Task.sleep(for: .milliseconds(50))
+        while assistant.busy { try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertNil(assistant.error, assistant.error ?? "")
+        XCTAssertEqual(s.params.printBrightnessStops, 0.5, accuracy: 1e-9, "the patch went through")
+        XCTAssertEqual(assistant.steps.first?.changed, ["params.printBrightnessStops"])
+        XCTAssertNotNil(assistant.steps.first?.refused, "the placement did not")
+        let second = script.sent.count > 1 ? script.sent[1].text() : ""
+        XCTAssertTrue(second.contains("The rest of that round WAS applied"), "the next round is told")
+        XCTAssertFalse(second.contains("Your last patch was refused"), "and not that the patch was refused")
     }
 
     /// Applying a negative from a slide film prints it: the film list leaves

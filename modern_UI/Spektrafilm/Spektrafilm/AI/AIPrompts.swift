@@ -382,7 +382,7 @@ enum AIPrompts {
                              + (s.retracted ? " Taken back: it moved the print away from the reference." : ""))
             }
         }
-        if let feedback { lines.append("Your last patch was refused, so it was not applied: \(feedback) Fix it this round.") }
+        if let feedback { lines.append(feedback) }
         return lines.joined(separator: "\n")
     }
 
@@ -489,6 +489,44 @@ enum AIPrompts {
                          + ". castYB is warm (+) / cool (−), castRG magenta (+) / green (−).")
         }
         return lines
+    }
+
+    /// An answer that could not be read: nothing in it was applied.
+    static func unreadableFeedback(_ why: String) -> String {
+        "Your last answer could not be read, so nothing in it was applied: \(why) Fix it this round."
+    }
+
+    /// What the model is told about a round of which part was not applied —
+    /// and, as plainly, which part was. A patch and a Scene Placement are
+    /// applied apart, so a refused placement leaves the patch in force. It
+    /// used to be told "your last patch was refused, so it was not applied"
+    /// whatever was refused: on a night desk shot (2026-11-04, gemma4:26b) the
+    /// placement was refused three rounds running while the print brightness
+    /// written beside it to make up for it went through each time, and the
+    /// model, told it had not, raised it again — to +3, 42 % of the print at
+    /// white. Nil when nothing was refused.
+    static func roundFeedback(patchRefused: String?, placementRefused: String?, applied: [String]) -> String? {
+        switch (patchRefused, placementRefused) {
+        case (nil, nil):
+            return nil
+        case (let patch?, let placement):
+            var line = "Your last patch was refused, so it was not applied: \(patch)"
+            if let placement {
+                line += " Its Scene Placement was refused too: \(placement)"
+            } else if applied.contains("params.sceneLatitude") {
+                line += " Its Scene Placement was applied."
+            }
+            return line + " Fix it this round."
+        case (nil, let placement?):
+            let rest = applied.filter { $0 != "params.sceneLatitude" }
+            var line = "Your last Scene Placement was refused, so the scene was not placed: \(placement) "
+            line += rest.isEmpty
+                ? "Nothing else in that round changed anything."
+                : "The rest of that round WAS applied — \(rest.joined(separator: ", ")) — and is in the current values "
+                  + "above: build on it, and do not repeat or enlarge those changes to make up for the placement that "
+                  + "did not happen."
+            return line + " Place again only with pull-backs the fit allows, or leave the placement."
+        }
     }
 
     private static func shot(_ exif: EXIFReadout?) -> String {
