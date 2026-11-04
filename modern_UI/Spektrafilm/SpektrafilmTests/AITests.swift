@@ -343,6 +343,33 @@ final class AIUnitTests: XCTestCase {
         XCTAssertEqual(gap?["castYB"]?.number ?? 0, warm.castYB - grey.castYB, accuracy: 1e-3)
     }
 
+    /// A scanned film has no print stage: the refiner is told the enlarger's
+    /// fields do nothing and brightness is Film Exposure's, with a reference
+    /// too. A printed film reads as before.
+    func testTheRefinerIsToldAScannedFilmHasNoEnlarger() {
+        func px(_ r: UInt8, _ g: UInt8, _ b: UInt8) -> ImageMetrics {
+            let a = [UInt8](repeating: 0, count: 16).enumerated().map { [r, g, b, 255][$0.offset % 4] }
+            return a.withUnsafeBufferPointer { ImageMetrics(rgba: $0) }
+        }
+        func user(_ scanned: Bool, _ reference: ImageMetrics?) -> String {
+            AIPrompts.refinerUser(document: ["params": [:], "adjustments": [:]], latitude: nil, film: nil, exif: nil,
+                                  intent: "", history: [], feedback: nil, round: 1, of: 3,
+                                  reference: reference, print: reference == nil ? nil : px(128, 128, 128), scanned: scanned)
+        }
+        let warm = px(200, 150, 90)
+        for reference in [nil, warm] {
+            let printed = user(false, reference)
+            XCTAssertFalse(printed.contains("scanned, not printed"))
+            let slide = user(true, reference)
+            XCTAssertTrue(slide.contains("params.yFilterShift, params.mFilterShift and params.preflashExposure do nothing here"))
+            XCTAssertTrue(slide.contains("Set brightness with Film Exposure"))
+        }
+        XCTAssertTrue(user(false, warm).contains("Match brightness with params.printBrightnessStops"))
+        let slide = user(true, warm)
+        XCTAssertTrue(slide.contains("Match brightness with params.exposureCompensationEV"))
+        XCTAssertFalse(slide.contains("Match brightness with params.printBrightnessStops"), "no print brightness on a scan")
+    }
+
     /// With a reference the chooser is told what it is for and each tile's
     /// film distance; without one, nothing about a reference is said.
     func testTheChooserIsToldWhatAReferenceIsAndHowFarEachFilmIs() throws {
@@ -368,7 +395,7 @@ final class AIUnitTests: XCTestCase {
         let told = AIPrompts.chooserUser(proofs: proofs, catalog: .shared, exif: nil, intent: "", reference: reference)
         XCTAssertTrue(told.contains("after \"Reference:\""))
         XCTAssertTrue(told.contains("after \"Contact sheet:\""))
-        XCTAssertTrue(told.contains("do not rule a film out for those"), "brightness and cast are Refine's")
+        XCTAssertTrue(told.contains("On a film printed on paper, overall brightness and an overall cast are set afterwards"), "on paper, brightness and cast are Refine's")
         XCTAssertTrue(told.contains("the intent wins"))
         let rows = told.split(separator: "\n").filter { $0.hasPrefix("1. ") || $0.hasPrefix("2. ") }
         XCTAssertEqual(rows.count, 2)
@@ -376,7 +403,11 @@ final class AIUnitTests: XCTestCase {
             row.range(of: "film distance ").flatMap { Double(row[$0.upperBound...].prefix { $0 == "." || $0.isNumber }) }
         }
         let near = try XCTUnwrap(distance(rows[0])), far = try XCTUnwrap(distance(rows[1]))
-        XCTAssertEqual(near, reference.filmDistance(to: proofs[0].metrics), accuracy: 0.01)
+        XCTAssertEqual(near, reference.filmDistance(to: proofs[0].metrics, scanned: false), accuracy: 0.01)
+        XCTAssertFalse(rows[0].contains("scanned:"), "a film on paper is judged by its own contrast and colour")
+        XCTAssertTrue(rows[1].contains("(scanned: brightness and cast included)"), "a slide has no enlarger to move them")
+        XCTAssertEqual(far, reference.distance(to: proofs[1].metrics), accuracy: 0.01)
+        XCTAssertTrue(told.contains("A slide film (\"scanned\" on the sheet) has no print and no enlarger"))
         XCTAssertLessThan(near, far, "the neutral tile is nearer a near-neutral reference")
     }
 
@@ -1076,15 +1107,17 @@ final class ReferenceImageTests: XCTestCase {
         XCTAssertTrue(CGImageDestinationFinalize(dest))
         let r = try ReferenceImage.load(url)
         XCTAssertTrue(r.isMonochrome)
-        XCTAssertEqual(r.filmDistance(to: r.metrics), 0, accuracy: 1e-9)
+        XCTAssertEqual(r.filmDistance(to: r.metrics, scanned: false), 0, accuracy: 1e-9)
         var brighterAndWarmer = r.metrics
         brighterAndWarmer.meanLuma += 0.2; brighterAndWarmer.castYB += 0.05; brighterAndWarmer.castRG -= 0.03
-        XCTAssertEqual(r.filmDistance(to: brighterAndWarmer), 0, accuracy: 1e-9, "the enlarger's, not the film's")
+        XCTAssertEqual(r.filmDistance(to: brighterAndWarmer, scanned: false), 0, accuracy: 1e-9, "the enlarger's, not the film's")
+        XCTAssertEqual(r.filmDistance(to: brighterAndWarmer, scanned: true), r.distance(to: brighterAndWarmer), accuracy: 1e-9,
+                       "a slide has no enlarger: they are its own")
         XCTAssertGreaterThan(r.distance(to: brighterAndWarmer), 1, "while Refine's distance sees them")
         var vivid = r.metrics; vivid.colorfulness += 8
         var vividAndHard = vivid; vividAndHard.contrast += 0.03
-        XCTAssertEqual(r.filmDistance(to: vivid), 1, accuracy: 1e-9)
-        XCTAssertEqual(r.filmDistance(to: vividAndHard), 2, accuracy: 1e-9)
+        XCTAssertEqual(r.filmDistance(to: vivid, scanned: false), 1, accuracy: 1e-9)
+        XCTAssertEqual(r.filmDistance(to: vividAndHard, scanned: false), 2, accuracy: 1e-9)
     }
 
     func testAFileThatIsNotAnImageIsRefusedByName() throws {
@@ -1438,6 +1471,26 @@ final class AISessionTests: XCTestCase {
         let back = try JSONDecoder().decode(AIEvalResults.self, from: Data(contentsOf: out.appending(path: "results.json")))
         XCTAssertEqual(back, results, "what is written reads back")
         XCTAssertTrue(AIEval.markdown(results, baseline: back).contains("Baseline end"))
+    }
+
+    /// Refine on a slide film says so to the model: the session's scan, not
+    /// a guess from the film's name, decides it.
+    func testRefiningASlideFilmTellsTheModelThereIsNoEnlarger() async throws {
+        let url = try syntheticFrame()
+        let ws = AgentWorkspace()
+        try await ws.open(url.path)
+        let s = ws.session
+        s.selectFilmStock("fujifilm_velvia_100")
+        try await ws.settle()
+        XCTAssertTrue(s.params.scanFilm, "a slide film is scanned")
+        let script = Script([["rationale": "", "patch_json": "{}", "placement": .null, "done": true]])
+        let assistant = AIAssistant(session: s)
+        assistant.makeClient = { AIClient(kind: .anthropic, model: "claude-opus-5-5", baseURL: "", apiKey: "k", transport: script) }
+        assistant.refine()
+        try await Task.sleep(for: .milliseconds(50))
+        while assistant.busy { try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertNil(assistant.error, assistant.error ?? "")
+        XCTAssertTrue(script.sent.first?.text().contains("This film is scanned, not printed") == true)
     }
 
     /// Applying a negative from a slide film prints it: the film list leaves

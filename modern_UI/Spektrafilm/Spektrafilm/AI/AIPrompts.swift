@@ -183,13 +183,16 @@ enum AIPrompts {
                 "The first image, after \"Reference:\", is a picture the person wants this photograph to look like; the "
                 + "second, after \"Contact sheet:\", is the sheet. Rank first the films whose own rendering comes closest "
                 + "to the reference's look: saturation, contrast, palette, and how skin, foliage and sky are rendered. "
-                + "Not its subject, framing or content. Overall brightness and an overall cast are set afterwards by "
-                + "Refine (print brightness and the enlarger's filters), so do not rule a film out for those; what "
-                + "Refine cannot change is the film's own saturation, contrast and palette. If the intent says "
-                + "otherwise, the intent wins.",
+                + "Not its subject, framing or content. On a film printed on paper, overall brightness and an overall "
+                + "cast are set afterwards by Refine (print brightness and the enlarger's filters), so do not rule such a "
+                + "film out for those; what Refine cannot change is the film's own saturation, contrast and palette. A "
+                + "slide film (\"scanned\" on the sheet) has no print and no enlarger: chosen, its brightness and cast "
+                + "stay much as the tile shows them, so they count against it. If the intent says otherwise, the "
+                + "intent wins.",
                 "Measured on the reference: " + reference.metrics.json.text(),
                 "Each tile's \"film distance\" below is how far its contrast and colourfulness are from the reference's "
-                + "(lower is closer). They are whole-frame averages: judge skin, sky and foliage by looking.",
+                + "and, for a scanned film, its brightness and cast too (lower is closer). They are whole-frame "
+                + "averages: judge skin, sky and foliage by looking.",
             ]
         }
         lines.append("The contact sheet above. Measurements per tile (clip = fraction of pixels; luma, contrast 0–1; "
@@ -201,7 +204,11 @@ enum AIPrompts {
                 + "shadow clip \(pct(m.shadowClip)), luma \(f(m.meanLuma)), contrast \(f(m.contrast)), "
                 + "colourfulness \(String(format: "%.0f", m.colorfulness)), cast RG \(signed(m.castRG)) YB \(signed(m.castYB))"
             if let l = p.latitude { row += ", within \(pct(l.within))" }
-            if let reference { row += String(format: ", film distance %.2f", reference.filmDistance(to: m)) }
+            if let reference {
+                let scanned = p.candidate.paper == nil
+                row += String(format: ", film distance %.2f", reference.filmDistance(to: m, scanned: scanned))
+                if scanned { row += " (scanned: brightness and cast included)" }
+            }
             lines.append(row)
         }
         lines.append(shot(exif))
@@ -305,10 +312,20 @@ enum AIPrompts {
                             intent: String, history: [AIAssistant.Step], feedback: String?,
                             round: Int, of total: Int, faces: SkinMask? = nil, noFilm: Bool = false,
                             reference: ImageMetrics? = nil, print: ImageMetrics? = nil,
-                            distance: Double? = nil, retracted: (from: Double, to: Double)? = nil) -> String {
+                            distance: Double? = nil, retracted: (from: Double, to: Double)? = nil,
+                            scanned: Bool = false) -> String {
         var lines = ["The print above, round \(round) of \(total). Film: \(film ?? "?")."]
+        if scanned {
+            // No print stage when the film is scanned (`pipeline.cpp`): the
+            // enlarger's fields are written and nothing moves.
+            lines.append("This film is scanned, not printed: there is no paper and no enlarger, so params.printBrightnessStops, "
+                         + "params.yFilterShift, params.mFilterShift and params.preflashExposure do nothing here — leave them. "
+                         + "Set brightness with Film Exposure (params.exposureCompensationEV: on a scan it is the light into "
+                         + "the film, so it moves the picture's brightness), and colour with Post-Dev white balance and colour "
+                         + "balance by tonal zone.")
+        }
         if let reference {
-            lines += referenceLines(reference, print: print)
+            lines += referenceLines(reference, print: print, scanned: scanned)
             if let distance {
                 lines.append(String(format: "Distance from the reference, all gaps together: %.2f (lower is closer).", distance))
             }
@@ -437,7 +454,17 @@ enum AIPrompts {
     /// is the target, never its subject; the intent outranks it; and the
     /// numbers are what a local model, unsure of a colour difference between
     /// two pictures by eye, can converge on.
-    static func referenceLines(_ reference: ImageMetrics, print: ImageMetrics?) -> [String] {
+    static func referenceLines(_ reference: ImageMetrics, print: ImageMetrics?, scanned: Bool = false) -> [String] {
+        let brightness = scanned
+            ? "Match brightness with params.exposureCompensationEV: the film is scanned, so it moves the whole picture "
+              + "lighter or darker, and there is no print brightness. Scene Placement is for a scene the medium cannot "
+              + "hold, not for brightness. Go by the numbers below, not by eye: a positive meanLuma gap means the print "
+              + "must get lighter, a negative one darker."
+            : "Match brightness with params.printBrightnessStops (positive prints brighter): it moves the whole "
+              + "print lighter or darker. Film Exposure (exposureCompensationEV) and the meter change where the scene sits "
+              + "on the film's curve — its contrast and the colour in the toe and shoulder — far more than the print's "
+              + "brightness, and Scene Placement is for a scene the medium cannot hold, not for brightness. Go by the "
+              + "numbers below, not by eye: a positive meanLuma gap means the print must get lighter, a negative one darker."
         var lines = [
             "The first image, after \"Reference:\", is a picture the person wants this print to look like; the second, "
             + "after \"Current print:\", is the print. Bring the print's look toward the reference: white balance and "
@@ -445,11 +472,7 @@ enum AIPrompts {
             + "Not its subject, framing or content — it may be another scene, another film or a digital photograph. "
             + "Get as close as the fields allow and stop there: what only another film could give, leave; keep skin "
             + "and neutral greys believable. If the intent says otherwise, the intent wins.",
-            "Match brightness with params.printBrightnessStops (positive prints brighter): it moves the whole "
-            + "print lighter or darker. Film Exposure (exposureCompensationEV) and the meter change where the scene sits "
-            + "on the film's curve — its contrast and the colour in the toe and shoulder — far more than the print's "
-            + "brightness, and Scene Placement is for a scene the medium cannot hold, not for brightness. Go by the "
-            + "numbers below, not by eye: a positive meanLuma gap means the print must get lighter, a negative one darker.",
+            brightness,
             "Measured on the reference: " + reference.json.text(),
         ]
         if let print {

@@ -32,10 +32,18 @@ struct ReferenceImage: Sendable {
     }
 
     /// How far a *film* is from this reference: only what Refine cannot
-    /// move afterwards — contrast and colourfulness, the film's own. The
-    /// print's overall brightness is the enlarger's and an overall cast its
-    /// filters', so neither counts against a film. What Choose a Film ranks by.
-    func filmDistance(to proof: ImageMetrics) -> Double {
+    /// move afterwards. Printed on paper, that is contrast and colourfulness,
+    /// the film's own: the print's overall brightness is the enlarger's and
+    /// an overall cast its filters'. A `scanned` film — a slide — has no print
+    /// stage (`pipeline.cpp`, the printing nodes run only without
+    /// `scan_film`), so no enlarger to move either, and both count: its
+    /// distance is the whole `distance`. Measured 2026-11-03 on gemma4:26b,
+    /// every film chosen was a slide while this counted neither, and Choose
+    /// then Refine ended further from the reference than Refine alone in two
+    /// of three cases (6.39 against 3.19, 6.32 against 4.01). What Choose a
+    /// Film ranks by.
+    func filmDistance(to proof: ImageMetrics, scanned: Bool) -> Double {
+        if scanned { return distance(to: proof) }
         let r = metrics
         return abs(r.contrast - proof.contrast) / 0.03 + abs(r.colorfulness - proof.colorfulness) / 8
     }

@@ -176,7 +176,7 @@ final class AIAssistant {
             }
             guard session.selection == url else { return }
             recommendation = Recommendation(url: url, summary: summary, picks: picks, compared: proofs.count,
-                                            filmDistances: reference.map { r in proofs.map { r.filmDistance(to: $0.metrics) } },
+                                            filmDistances: reference.map { r in proofs.map { r.filmDistance(to: $0.metrics, scanned: $0.candidate.paper == nil) } },
                                             addedMonochrome: addedMonochrome)
         }
     }
@@ -388,7 +388,7 @@ final class AIAssistant {
                     exif: session.exif, intent: intent, history: steps, feedback: feedback,
                     round: round, of: Self.maxRounds, faces: faces, noFilm: session.noFilm,
                     reference: reference?.metrics, print: shot.metrics,
-                    distance: best?.distance, retracted: retraction)
+                    distance: best?.distance, retracted: retraction, scanned: session.params.scanFilm)
                 retraction = nil
                 // Each round is a request of its own, so the reference goes
                 // with every one, labelled, ahead of the print.
