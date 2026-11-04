@@ -6,6 +6,8 @@
 //  base URL>` (or `anthropic`, the key from Settings ▸ AI) and
 //  `SPK_AI_MODEL`. `SPK_AI_EVAL_BASELINE=<an earlier results.json>` adds the
 //  comparison; `SPK_AI_EVAL_STRICT=1` fails the test on a marked row.
+//  `SPK_AI_EVAL_RESULTS=<results.json>` sums up results already taken, with
+//  no model (`Tools/ai-eval.sh --resummarize`).
 //  `Tools/ai-eval.sh` sets all of it. The manifest's format, and how the
 //  references these numbers were first taken with were made, are in
 //  `Tools/ai-eval/README.md`.
@@ -39,7 +41,7 @@ enum AIEvalRunner {
         let ws = AgentWorkspace()
         for c in manifest.cases {
             for mode in manifest.modes(of: c) {
-                for run in 1...(manifest.runs ?? 1) {
+                for run in 1...manifest.runCount {
                     let folder = out.appending(path: "\(c.name)/\(mode.rawValue)-\(run)")
                     let r = await once(c, mode: mode, run: run, folder: folder, ws: ws, makeClient: makeClient)
                     print("EVAL \(c.name) \(mode.rawValue) \(run): "
@@ -50,7 +52,8 @@ enum AIEvalRunner {
             }
         }
         let results = AIEvalResults(model: model, base: base, host: Host.current().localizedName ?? ProcessInfo.processInfo.hostName,
-                                    manifest: manifestPath, date: date, records: records)
+                                    manifest: manifestPath, date: date, records: records,
+                                    cases: manifest.cases)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(results).write(to: out.appending(path: "results.json"))
@@ -185,6 +188,23 @@ final class AIEvalTests: XCTestCase {
     func testEvaluate() async throws {
         // An empty variable is an unset one: a script passes them through.
         let env = ProcessInfo.processInfo.environment.filter { !$0.value.isEmpty }
+        func read(_ path: String) throws -> AIEvalResults {
+            try JSONDecoder().decode(AIEvalResults.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
+        }
+        // Results already taken, summed up again — after the method changed,
+        // say — with no model and no engine.
+        if let path = env["SPK_AI_EVAL_RESULTS"] {
+            let results = try read(path)
+            let baseline = try env["SPK_AI_EVAL_BASELINE"].map(read)
+            let out = URL(fileURLWithPath: env["SPK_AI_EVAL_OUT"] ?? URL(fileURLWithPath: path).deletingLastPathComponent().path,
+                          isDirectory: true)
+            try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+            let md = AIEval.markdown(results, baseline: baseline)
+            try Data(md.utf8).write(to: out.appending(path: "summary.md"))
+            print(md)
+            print("EVAL out:", out.path)
+            return
+        }
         guard let base = env["SPK_AI_E2E"], let model = env["SPK_AI_MODEL"] else {
             throw XCTSkip("SPK_AI_E2E and SPK_AI_MODEL are not set")
         }
@@ -204,9 +224,7 @@ final class AIEvalTests: XCTestCase {
         }
         let out = URL(fileURLWithPath: env["SPK_AI_EVAL_OUT"] ?? env["SPK_AI_OUT"]
                       ?? FileManager.default.temporaryDirectory.appending(path: "spk-ai-eval").path, isDirectory: true)
-        let baseline = try env["SPK_AI_EVAL_BASELINE"].map {
-            try JSONDecoder().decode(AIEvalResults.self, from: Data(contentsOf: URL(fileURLWithPath: $0)))
-        }
+        let baseline = try env["SPK_AI_EVAL_BASELINE"].map(read)
 
         let saved = (AISettings.enabled, AISettings.provider, AISettings.openAIBaseURL, AISettings.openAIModel,
                      AISettings.anthropicModel)
