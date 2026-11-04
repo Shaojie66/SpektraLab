@@ -125,6 +125,7 @@ enum AIEvalRunner {
             rec.retracted = assistant.steps.filter(\.retracted).count
             rec.unreadable = assistant.steps.filter { $0.refused?.contains("could not be read") == true }.count
             rec.refused = assistant.steps.filter { $0.refused != nil && $0.refused?.contains("could not be read") != true }.count
+            rec.fields = Array(Set(assistant.steps.flatMap(\.changed))).sorted()
             let end = try await measure("after.jpg")
             if let reference {
                 rec.end = reference.distance(to: end)

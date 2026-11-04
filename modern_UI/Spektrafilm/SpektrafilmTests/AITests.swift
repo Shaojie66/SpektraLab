@@ -1446,7 +1446,7 @@ final class AISessionTests: XCTestCase {
         ])
         try manifest.validate()
         let script = Script([
-            ["rationale": "", "patch_json": "{}", "placement": .null, "done": true],
+            ["rationale": "", "patch_json": "{\"adjustments\":{\"contrast\":3}}", "placement": .null, "done": true],
             ["meter": "balanced", "reason": "even"],
             ["summary": "s", "ranking": [["index": 2, "score": 90, "reason": "r"]]],
         ])
@@ -1459,6 +1459,7 @@ final class AISessionTests: XCTestCase {
         let own0 = results.records[0], chosen = results.records[1]
         XCTAssertEqual(own0.start ?? 99, 0, accuracy: 0.05, "its own print is at the reference")
         XCTAssertEqual(own0.rounds, 1)
+        XCTAssertEqual(own0.fields, ["adjustments.contrast"], "what the model wrote is kept")
         XCTAssertNotNil(own0.gaps)
         let film = try XCTUnwrap(chosen.film, "the choice is recorded")
         XCTAssertNotEqual(film.pick, "kodak_portra_400", "tile 2, not the film it had")

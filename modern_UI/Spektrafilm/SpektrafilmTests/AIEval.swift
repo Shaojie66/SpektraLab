@@ -106,6 +106,9 @@ struct AIEvalRecord: Codable, Equatable, Sendable {
     /// Rounds whose answer could not be read, and rounds refused for scope or range.
     var unreadable = 0
     var refused = 0
+    /// Every field the model wrote over the run, taken back or not: what it
+    /// reached for. Nil in results written before it was kept.
+    var fields: [String]?
     var seconds = 0.0
     var error: String?
 }
@@ -279,6 +282,15 @@ final class AIEvalSummaryTests: XCTestCase {
         XCTAssertTrue(md.contains("further by more than 0.5"))
         XCTAssertTrue(md.contains("warm refine run 2: timed out"))
         XCTAssertFalse(AIEval.markdown(now).contains("Baseline"), "no baseline column without one")
+    }
+
+    /// Results written before `fields` was kept still read, so an old run
+    /// stays a baseline.
+    func testResultsWithoutFieldsStillRead() throws {
+        let old = #"{"model":"m","base":"b","host":"h","manifest":"x","date":"d","records":[{"caseName":"a","mode":"refine","run":1,"rounds":1,"retracted":0,"unreadable":0,"refused":0,"seconds":1,"start":2,"end":1}]}"#
+        let r = try JSONDecoder().decode(AIEvalResults.self, from: Data(old.utf8))
+        XCTAssertNil(r.records[0].fields)
+        XCTAssertEqual(r.records[0].end, 1)
     }
 
     /// Refused before anything runs, by name; relative paths are the manifest's.
