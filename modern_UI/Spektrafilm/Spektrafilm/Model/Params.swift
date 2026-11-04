@@ -566,7 +566,18 @@ struct FilmParams: Codable, Equatable, Sendable {
     /// This is a print-layer choice, so it reprints the cached negative. The
     /// preference is retained when `scanFilm` is selected, but is made
     /// ineffective on the direct film-scan path.
-    var extendedDynamicRange: Bool = false
+    ///
+    /// **On for a new frame in this fork** (upstream leaves it off). Without
+    /// it the paper's shoulder flattens the highlights: measured 2026-11-04 on
+    /// two FiveK frames, Portra 400 on Supra Endura at full size, the fine
+    /// detail in the brightest tenth of the print rose ×1.16 (glacier) and
+    /// ×1.55 (sky and clouds) with EDR on, whole-frame brightness within
+    /// 0.001, nothing clipped either way, and a reprint 0.12 s both ways.
+    /// Every colour paper carries a calibrated tone map; black-and-white,
+    /// scans and the DI drop it through `effectiveExtendedDynamicRange`. A
+    /// sidecar always writes the field, so a frame already edited keeps its
+    /// own choice; one from before EDR existed reads off (`init(from:)`).
+    var extendedDynamicRange: Bool = true
 
     /// The backend only applies EDR to an actual print profile. Keep the
     /// user's preference in the sidecar while making the wire value false for
@@ -710,7 +721,7 @@ struct FilmParams: Codable, Equatable, Sendable {
         glareActive = true
         scanFilm = false
         digitalIntermediate = false
-        extendedDynamicRange = false
+        extendedDynamicRange = true
         preflashExposure = 0
         contrastMask = ContrastMaskSettings()
         sceneLatitude = SceneLatitudeSettings()
@@ -748,6 +759,8 @@ struct FilmParams: Codable, Equatable, Sendable {
         glareActive = try c.decode(Bool.self, forKey: .glareActive)
         scanFilm = try c.decode(Bool.self, forKey: .scanFilm)
         digitalIntermediate = try c.decodeIfPresent(Bool.self, forKey: .digitalIntermediate) ?? false
+        // Off when absent, though a new frame defaults on: a sidecar without
+        // the key was written before EDR existed, and its print stays as it was.
         extendedDynamicRange = try c.decodeIfPresent(Bool.self, forKey: .extendedDynamicRange) ?? false
         preflashExposure = try c.decodeIfPresent(Double.self, forKey: .preflashExposure) ?? 0
         contrastMask = try c.decodeIfPresent(ContrastMaskSettings.self, forKey: .contrastMask)

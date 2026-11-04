@@ -14,14 +14,20 @@ final class ParamsTests: XCTestCase {
         XCTAssertEqual(d["print_exposure"]?.doubleValue ?? 0, 0.5, accuracy: 1e-9, "brighter by one stop = half the enlarger exposure")
     }
 
-    func testExtendedDynamicRangeDefaultsOffAndRoutesToPrintLayer() {
-        XCTAssertFalse(FilmParams.default.extendedDynamicRange)
+    /// On for a new frame in this fork: the paper's shoulder flattens the
+    /// highlights without it (`FilmParams.extendedDynamicRange`).
+    func testExtendedDynamicRangeDefaultsOnAndRoutesToPrintLayer() {
+        XCTAssertTrue(FilmParams.default.extendedDynamicRange)
+        XCTAssertTrue(FilmParams().extendedDynamicRange, "the initialiser agrees with the declaration")
+        XCTAssertTrue(FilmParams.default.effectiveExtendedDynamicRange, "the default paper is a colour paper with a tone map")
         XCTAssertEqual(FilmParams.default.wire.first { $0.name == "extended_dynamic_range" }?.value,
-                       .bool(false))
+                       .bool(true))
 
-        var p = FilmParams.default
+        var off = FilmParams.default
+        off.extendedDynamicRange = false
+        var p = off
         p.extendedDynamicRange = true
-        let (delta, layers) = p.delta(from: .default)
+        let (delta, layers) = p.delta(from: off)
         XCTAssertEqual(layers, [.print])
         XCTAssertEqual(delta["extended_dynamic_range"], .bool(true))
 
@@ -34,6 +40,15 @@ final class ParamsTests: XCTestCase {
         var activePrint = FilmParams.default
         activePrint.extendedDynamicRange = true
         XCTAssertEqual(p.delta(from: activePrint).delta["extended_dynamic_range"], .bool(false))
+    }
+
+    /// A frame edited with EDR off says so in its sidecar, and keeps it
+    /// under the new default.
+    func testAnEditedFrameKeepsItsOwnEDRChoice() throws {
+        var sidecar = Sidecar()
+        sidecar.params.extendedDynamicRange = false
+        let decoded = try JSONDecoder().decode(Sidecar.self, from: JSONEncoder().encode(sidecar))
+        XCTAssertFalse(decoded.params.extendedDynamicRange)
     }
 
     func testSidecarMissingOnlyExtendedDynamicRangeDefaultsOff() throws {

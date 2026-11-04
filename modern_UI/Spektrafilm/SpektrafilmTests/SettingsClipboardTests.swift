@@ -75,7 +75,7 @@ final class SettingsClipboardTests: XCTestCase {
         p.filmStock = "kodak_gold_200"
         p.printStock = "fujifilm_crystal_archive_typeii"
         p.scanFilm = true
-        p.extendedDynamicRange = true
+        p.extendedDynamicRange = false  // the non-default, on since EDR defaults on
         p.exposureCompensationEV = 1.5
         p.autoExposureMethod = "protect_highlights"
         p.autoExposure = false
