@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=392962a; updated=2026-11-03 -->
+<!-- README_SYNC: source=fc9ef49; updated=2026-11-04 -->
 **English** · [简体中文](README.zh-CN.md)
 
 # spektralab-ai
@@ -45,6 +45,8 @@ Everything else is SpektraLab 1.3.5, merged from upstream:
   halation and coupler diffusion scale with the frame in micrometres.
 - **Fast.** A C++ Metal engine compiled into the app: a full-resolution render
   in under a second.
+- **Highlights kept.** This fork turns the paper's extended dynamic range (EDR)
+  on for a new frame, so the paper's shoulder does not flatten the highlights.
 - **The film itself.** Film Edge, Date Back, half-frame pairs, settings sync,
   and a CLI and MCP server — see the
   [SpektraLab README](https://github.com/JamesQiu2005/SpektraLab#readme).
@@ -89,7 +91,7 @@ xcodebuild -project Spektrafilm.xcodeproj -scheme SpektrafilmTests \
            -configuration Debug -derivedDataPath build/DerivedData test
 ```
 
-654 tests. The camera fixtures are not in this repository: without them 78
+655 tests. The camera fixtures are not in this repository: without them 78
 skip and the run takes about 45 seconds while still reporting 0 failures —
 trust the duration. To put your own photos through open, Process, a
 full-size print and an export, each stage timed:

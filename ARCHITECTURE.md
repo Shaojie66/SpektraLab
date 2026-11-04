@@ -134,6 +134,15 @@ scanning    scan_spectral · xyz_to_rgb · gamut_compress · cctf · edr · glar
             · scanner_blur · unsharp · bw_correction · overscan.light
 ```
 
+- **`edr` is on for a new frame in this fork** (`FilmParams.extendedDynamicRange`;
+  upstream leaves it off). Without it the paper's shoulder flattens the
+  highlights: on two FiveK frames the fine detail in the brightest tenth of
+  the print rose ×1.16 and ×1.55 with it on, whole-frame brightness within
+  0.001 and a reprint the same 0.12 s. Every colour paper carries a calibrated
+  `edr_tone_map`; black-and-white, scans and the DI drop the node through
+  `effectiveExtendedDynamicRange`. A sidecar always writes the field, so an
+  edited frame keeps its choice, and one from before EDR reads off.
+
 - **The film edge is three nodes** (§8.10): the exposure of the film outside
   the gate (edge print, fog, leaks, the date) before halation, so it blooms and
   develops with the picture; the film's presence in the print; and the scan's

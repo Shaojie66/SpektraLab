@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=392962a; updated=2026-11-03 -->
+<!-- README_SYNC: source=fc9ef49; updated=2026-11-04 -->
 [English](README.md) · **简体中文**
 
 # spektralab-ai
@@ -35,6 +35,7 @@
 - **光谱计算，不是 LUT。** 光线以 81 个波长穿过胶片与相纸各自的染料层，和暗房里的过程一致。
 - **物理尺度。** 告诉它底片是 120 还是 135，颗粒、光晕和成色剂扩散就按画幅以微米为单位缩放。
 - **快。** C++ Metal 引擎直接编译进应用，全分辨率渲染不到一秒。
+- **保留高光层次。** 本 fork 让新照片默认打开相纸的扩展动态范围（EDR），高光不会被相纸曲线的肩部压平。
 - **胶片本身。** 片边、日期后背、半格拼接、设置同步，以及命令行和 MCP 服务——详见[SpektraLab 的 README](https://github.com/JamesQiu2005/SpektraLab/blob/main/README.zh-CN.md)。
 
 | RAW 解码 ⟷ 胶片与相纸（⌥\\） | 1:1 颗粒 |
@@ -73,7 +74,7 @@ xcodebuild -project Spektrafilm.xcodeproj -scheme SpektrafilmTests \
            -configuration Debug -derivedDataPath build/DerivedData test
 ```
 
-共 654 个测试。相机测试素材不在本仓库里：没有素材时会跳过 78 个，大约 45 秒跑完，照样报告 0 失败——看耗时，别只看失败数。想用自己的照片把"打开、配光、全尺寸冲印、导出"完整走一遍并分步计时：
+共 655 个测试。相机测试素材不在本仓库里：没有素材时会跳过 78 个，大约 45 秒跑完，照样报告 0 失败——看耗时，别只看失败数。想用自己的照片把"打开、配光、全尺寸冲印、导出"完整走一遍并分步计时：
 
 ```bash
 TEST_RUNNER_SPK_PIPELINE_DIR=~/photos TEST_RUNNER_SPK_PIPELINE_OUT=/tmp/out \
