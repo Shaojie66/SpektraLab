@@ -1,5 +1,5 @@
 {
-  "runs": 3,
+  "runs": 5,
   "cases": [
     { "name": "warm-portrait", "photo": "/path/to/fivek/a0269.dng", "reference": "refs/ref-warm.jpg",
       "modes": ["refine", "choose+refine"] },
