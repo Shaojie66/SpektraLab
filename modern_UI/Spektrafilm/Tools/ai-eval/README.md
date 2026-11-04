@@ -50,7 +50,7 @@ This is `example.json` in this folder. Its paths are placeholders.
 
 | Field | Required | Meaning |
 |---|---|---|
-| `runs` | no, default 1 | How many times each case runs in each mode. |
+| `runs` | no, default 5 | How many times each case runs in each mode. Five, because three against a baseline's three cannot be marked (see below). |
 | `cases[].name` | yes | Unique. Names the case in the table and its folder in the output. |
 | `cases[].photo` | yes | The photograph to edit. |
 | `cases[].reference` | no | The picture to bring it toward. Without one nothing is measured. |
@@ -115,16 +115,32 @@ What to look for:
 
 - End below Start: Refine moved the print toward the reference. End at or above Start means Refine did not help.
 - After choosing below Start: the film choice helped. A rank well above 1 means the model picked a film that is not among the nearest.
-- A wide range in End means one model varies from run to run; compare medians, not single runs, and use `runs` of 3 or more.
+- A wide range in End means one model varies from run to run; compare medians, not single runs, and keep `runs` at 5 or more.
 - Failed runs are listed at the bottom with their errors.
 
 ## Baseline and `--strict`
 
-With `--baseline <earlier results.json>` the table gains a Baseline end column. A row whose End median is further from the reference than the baseline's by more than 0.5 ends in **further by more than 0.5**. That margin is about the run-to-run spread of one model on these cases (`AIEval.margin`).
+With `--baseline <earlier results.json>` the table gains four columns: the baseline's End median, the change of the mean End, `p`, and a verdict.
 
-The comparison means something only on the same manifest, machine and model. When the baseline differs in any of them, the summary says **Not like for like** and names what differs. Do not read a mark then.
+`p` comes from a one-sided permutation test. The finished runs of both evaluations are pooled, every way of drawing as many runs as this evaluation has is tried, and `p` is the share of draws whose mean is at least as far from the reference as the one observed. It is the chance of a change that large from the model's own run-to-run spread alone. A row is marked **further** when the mean moved away and `p < 0.05`, and **closer** when it moved toward the reference and its own `p < 0.05`. Above 200,000 draws (about ten runs a side) the test samples 20,000 of them with a fixed seed, so the same results give the same table.
 
-By default the evaluation only reports, because one model's results vary from run to run. With `--strict` the test fails, and the script exits non-zero, when any row is marked.
+Why not a fixed margin: until 2026-11-04 a row was marked when its median ended more than 0.5 further. On muted-landscape, Refine alone moved 4.01 → 5.08 between two days with its prompt unchanged. Pooling those six runs, a split of three against three moved the median by more than 0.5 in 40 % of draws; on cool-night in all of them; on warm-portrait in none. One margin cannot fit cases this different. The permutation test measures each case against its own spread. The test uses the mean, while the table shows medians: with three or five runs a median moves in steps, and draws tie with the observed one.
+
+**Runs matter.** The smallest `p` a test can give is 1 over the number of draws. Three runs against three give 20 draws, so `p` cannot go below 0.05 and nothing can be marked; the verdict then says *these runs cannot reach p < 0.05*. That is why `runs` defaults to 5: five against a baseline of three allow 0.018, five against five 0.004. A side with fewer than two finished runs is not tested.
+
+The comparison means something only on the same cases (photographs, references and modes; the number of runs may differ), machine and model. When the baseline differs in any of them, the summary says **Not like for like** and names what differs. Do not read a mark then. Results written before the cases were kept are held to the manifest's path.
+
+A small but consistent shift can be marked: the test asks whether the runs moved, not whether the move matters. Look at the change and at `sheet.jpg` before acting on a mark.
+
+By default the evaluation only reports. With `--strict` the test fails, and the script exits non-zero, when any row is marked **further**; **closer** never fails it.
+
+### Summing up again
+
+```bash
+modern_UI/Spektrafilm/Tools/ai-eval.sh --resummarize <results.json> <out-folder> [--baseline <earlier results.json>]
+```
+
+Writes a new `summary.md` from results already taken, with no model and no engine: after the method changed, or against a different baseline.
 
 ## Making references
 
@@ -195,6 +211,6 @@ Use a different photo for the reference than the one you edit. A reference made 
 ## Limits
 
 - Slow. A `choose+refine` run took 336 s on gemma4:26b locally. Earlier runs of an 8B model on a MacBook Air took 3 to 7 minutes, and the first request for a new photo there could exceed the app's 180 s request timeout. Such a run is recorded as failed.
-- One model varies from run to run. A single run proves nothing; use `runs` of 3 or more and read the medians.
+- One model varies from run to run. A single run proves nothing; keep `runs` at 5 or more and read the medians and `p`.
 - The distance is five measured numbers, not a judgement of how the picture looks. A smaller distance means the numbers are closer; look at `sheet.jpg` before believing it.
 - A baseline compares only on the same manifest, machine and model.

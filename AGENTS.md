@@ -380,9 +380,12 @@ map. Three things to keep:
   the previous `results.json` (`--baseline`).** A green suite does not cover
   this: the refiner telling the enlarger filters' direction backwards (45bcc2c)
   and Apply printing the previous film (4dacb23) passed every unit test and
-  were found only by measuring the distance to a reference. A median ending
-  more than 0.5 further than last time is marked; one model's runs vary, so
-  the baseline counts only on the same manifest, machine and model.
+  were found only by measuring the distance to a reference. A row is marked
+  when a one-sided permutation test against the baseline's runs gives
+  p < 0.05; three runs against three cannot get there, so `runs` defaults
+  to 5. It replaced a fixed 0.5, which marked a case whose prompt had not
+  changed. The baseline counts only on the same cases, machine and model;
+  `--resummarize` re-sums old results with no model.
 
 ## Traps
 
