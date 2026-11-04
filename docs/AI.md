@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=4dacb23; updated=2026-11-03 -->
+<!-- README_SYNC: source=480a1a7; updated=2026-11-04 -->
 **English** · [简体中文](AI.zh-CN.md) · [Back to the README](../README.md)
 
 # The AI features
@@ -66,12 +66,14 @@ With a reference, the films' request sends it, labelled "Reference:", ahead of
 the contact sheet, labelled "Contact sheet:". The model is told to rank first
 the films whose own rendering comes closest to the reference's look —
 saturation, contrast, palette, how skin, foliage and sky render — and not its
-subject or framing. It is told not to rule a film out for overall brightness or
-an overall cast, which Refine sets afterwards (print brightness, the enlarger's
+subject or framing. It is told not to rule a film printed on paper out for overall
+brightness or an overall cast, which Refine sets afterwards (print brightness, the enlarger's
 filters), and to follow your intent where the two disagree. Each tile also
 carries a "film distance": how far its contrast and colourfulness are from the
-reference's (lower is closer). Brightness and overall cast are deliberately not
-counted. The distances are whole-frame averages, so skin, sky and foliage are
+reference's (lower is closer). For a film printed on paper, brightness and
+overall cast are deliberately not counted. A slide film is scanned and has no
+print stage, so no enlarger to move them afterwards: its distance counts them
+too, and the tile says so. The distances are whole-frame averages, so skin, sky and foliage are
 left to the model's eye. The exposure step above is done without the reference:
 the meter is the scene's.
 
@@ -117,6 +119,11 @@ Back or the decode; changes out of scope or out of range are refused and the
 refusal is sent back to it. This is not generative retouching: it moves
 existing controls, never the film model or the print's pixels, and the result
 is saved in the ordinary sidecar.
+
+On a slide film (scanned, no print) paper brightness, the Y/M filters and
+pre-flash do nothing, and the model is told so: brightness is then set with
+Film Exposure, which on a scan is the light into the film, and colour with
+Post-Dev.
 
 Refine can also follow a reference picture: the one chosen under the intent in
 [Choose a film](#choose-a-film), which describes what files it takes.
